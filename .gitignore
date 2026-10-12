@@ -7,3 +7,9 @@ obj/
 sim-out/
 TestResults/
 *.log
+
+# web client
+web/node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/

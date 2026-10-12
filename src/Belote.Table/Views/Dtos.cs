@@ -39,6 +39,12 @@ public sealed record IntentDto(
     AnnouncementSpecDto? Announcement = null,
     string? Card = null);
 
+/// <summary>Public per-seat card counts (never card identities).</summary>
+public sealed record HandSizesDto(int North, int East, int South, int West);
+
+/// <summary>Pushed to a connection whose table was replaced by another connection's new table.</summary>
+public sealed record TableClosedDto(int ProtocolVersion, string Reason);
+
 public sealed record SeatViewDto(
     string Seat,
     string Phase,
@@ -46,6 +52,7 @@ public sealed record SeatViewDto(
     string ToAct,
     int DealNumber,
     IReadOnlyList<string> OwnHand,
+    HandSizesDto HandSizes,
     IReadOnlyList<BidEntryDto> BiddingHistory,
     string? StandingBid,
     string? StandingBidder,

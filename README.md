@@ -91,3 +91,19 @@ in-library xoshiro256** generator (`SeededRandom`), so the same seed reproduces 
 byte-for-byte on any machine or .NET version. Changing the generator or any rule value changes the
 golden logs under `tests/Belote.Simulation.Tests/Golden` on purpose; regenerate with
 `BELOTE_UPDATE_GOLDEN=1` and review the diff.
+
+## Playing in the browser
+
+A bare-bones React + Tailwind client lives in `web/` (feature 003). Needs Node.js 22+.
+
+```bash
+dotnet run --project src/Belote.Server --urls http://localhost:5080
+```
+
+```bash
+cd web && npm install && npm run dev
+```
+
+Open the Vite URL it prints; `/table` is proxied to the server. For a single origin, run
+`npm run build` in `web/` and start the server with `--Web:RootPath=<absolute path to web/dist>`.
+See `web/README.md` for tests and `specs/003-playable-table-ui/quickstart.md` for validation steps.

@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Bare bones: no animations or transitions anywhere. */
+*,
+*::before,
+*::after {
+  animation: none !important;
+  transition: none !important;
+}
