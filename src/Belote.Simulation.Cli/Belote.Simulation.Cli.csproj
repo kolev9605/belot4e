@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>belote-sim</AssemblyName>
+    <RootNamespace>Belote.Simulation.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Belote.Simulation\Belote.Simulation.csproj" />
+  </ItemGroup>
+</Project>

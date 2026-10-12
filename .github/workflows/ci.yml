@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Nightly large batch (SC-001): 10,000 seeded games per configuration.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build
+        run: dotnet build Belote.sln -c Release
+      - name: Unit, property, golden and integration tests (includes 1,000-game batches)
+        run: dotnet test Belote.sln -c Release --no-build --logger "trx;LogFileName=results.trx"
+      - name: Bot-vs-bot simulation gate (all presets)
+        run: |
+          for preset in all-bot mixed-1 mixed-2 mixed-3 mixed-4 scripted-illegal; do
+            dotnet run --project src/Belote.Simulation.Cli -c Release --no-build -- \
+              run --games 1000 --seed 1 --seats "$preset" --out "sim-out/$preset"
+          done
+      - name: Upload simulation reports and failing logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-reports
+          path: sim-out/
+
+  nightly-batch:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build
+        run: dotnet build Belote.sln -c Release
+      - name: 10,000-game batches
+        env:
+          BELOTE_BATCH_GAMES: "10000"
+        run: dotnet test tests/Belote.Simulation.Tests -c Release --no-build --filter "Category=Batch"
+      - name: 10,000-game all-bot run with report
+        run: |
+          dotnet run --project src/Belote.Simulation.Cli -c Release --no-build -- \
+            run --games 10000 --seed 20260101 --out sim-out/nightly
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-report
+          path: sim-out/
