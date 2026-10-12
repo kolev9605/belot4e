@@ -12,8 +12,12 @@ announcements, belote, hanging points, all-tricks bonus, match to 151) with no U
 | `src/Belote.Bots` | `RandomLegalBot`: picks uniformly among the legal actions of its seat's view |
 | `src/Belote.Simulation` | Game runner, independent auditor, game log (JSON Lines), seeded batch runner, rule-set JSON |
 | `src/Belote.Simulation.Cli` | `belote-sim` command line (`run`, `replay`, `audit`) |
+| `src/Belote.Table` | `LiveTable`: one in-memory table (single-writer actor), per-seat views, bot driver, wire DTOs |
+| `src/Belote.Server` | ASP.NET Core + SignalR hub (`/table`) over `Belote.Table`: one player (South) vs three bots |
 | `tests/Belote.Core.Tests` | Unit tests per rule (`Rxx_*`), FsCheck properties |
 | `tests/Belote.Simulation.Tests` | Integration, determinism, golden logs, mixed seats, large batches |
+| `tests/Belote.Table.Tests` | Table rejections, privacy oracle, pacing/pause, concurrency, replay, equals-001 |
+| `tests/Belote.Server.Tests` | End-to-end over a real SignalR connection, incl. 100 seeded games |
 
 Design documents live in `specs/001-headless-belote-game/` (spec, plan, research, data model,
 contracts, quickstart, tasks).
@@ -45,6 +49,26 @@ dotnet run --project src/Belote.Simulation.Cli -c Release -- audit --log game.js
 ```
 
 Exit codes: `0` all games finished correctly, `1` at least one game failed a check, `2` invalid arguments.
+
+## Live table (one player against three bots)
+
+A headless server lets one connected client (South) play a full game against three
+`RandomLegalBot` seats in real time. The client sends intents only; the server validates every
+one with the rules engine and pushes that seat's view after each state change. Design and
+protocol: `specs/002-live-table-vs-bots/` (see `contracts/hub-protocol.md`).
+
+```bash
+dotnet run --project src/Belote.Server -c Release -- --urls http://127.0.0.1:5080
+```
+
+| Setting | Meaning |
+|---------|---------|
+| `Table:BotDelayMs` | Default pause before each bot move in ms (default 600; clamped 0..5000; a client may override per table; tests use 0) |
+| `Table:LogDirectory` | Optional directory that receives one JSON Lines log per finished game |
+
+The hub is at `/table`. Methods: `CreateTable`, `TakeSeat`, `SubmitIntent`, `GetView`; the server
+pushes `Update` messages. The end-to-end tests (`tests/Belote.Server.Tests`) are the reference
+client and run in CI with the rest of the solution.
 
 ## Rule variants are configuration
 

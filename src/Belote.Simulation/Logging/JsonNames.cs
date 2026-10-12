@@ -4,7 +4,7 @@ using Belote.Core;
 namespace Belote.Simulation;
 
 /// <summary>Stable, language-neutral names used in logs, rule-set files and reports.</summary>
-internal static class JsonNames
+public static class JsonNames
 {
     public static string Of(Seat seat) => seat switch
     {

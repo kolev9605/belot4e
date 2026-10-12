@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Belote.Table</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Belote.Core\Belote.Core.csproj" />
+    <ProjectReference Include="..\Belote.Bots\Belote.Bots.csproj" />
+    <ProjectReference Include="..\Belote.Simulation\Belote.Simulation.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Belote.Table.Tests" />
+    <InternalsVisibleTo Include="Belote.Server.Tests" />
+  </ItemGroup>
+</Project>
