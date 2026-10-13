@@ -104,7 +104,7 @@ export function Table() {
           <div className="col-span-3 flex justify-center">
             <SeatPanel seat="north" game={game} dealing={dealing} perSeat={perSeat} />
           </div>
-          <div className="self-center">
+          <div className="flex min-h-0">
             <SeatPanel seat="west" game={game} dealing={dealing} perSeat={perSeat} />
           </div>
           {game.phase === "bidding" ? (
@@ -114,14 +114,17 @@ export function Table() {
           ) : (
             <TrickArea trick={trick} />
           )}
-          <div className="self-center">
+          <div className="flex min-h-0">
             <SeatPanel seat="east" game={game} dealing={dealing} perSeat={perSeat} />
           </div>
         </div>
-        {game.phase !== "bidding" && <AnnouncePanel game={game} enabled={enabled} onAct={submit} />}
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+        {/* Reserved in every phase so the felt keeps one size whether or not there is anything to declare. */}
+        <div className="min-h-8">
+          {game.phase !== "bidding" && <AnnouncePanel game={game} enabled={enabled} onAct={submit} />}
+        </div>
+        <div className="flex flex-col items-center gap-1 sm:flex-row sm:justify-center sm:gap-x-4">
           <SeatPanel seat="south" game={game} dealing={dealing} perSeat={perSeat} />
-          <p data-testid="status" className="text-center text-base font-semibold">
+          <p data-testid="status" className="flex min-h-6 items-center justify-center text-center text-base font-semibold sm:min-h-12 sm:w-44">
             {status}
           </p>
         </div>
@@ -155,8 +158,11 @@ export function Table() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <NoticeBar notice={state.notice} onDismiss={dismissNotice} />
+    <div className="relative flex min-h-0 flex-1 flex-col gap-2">
+      {/* Floats over the table, so a notice never pushes the seats and felt around. */}
+      <div className="absolute inset-x-0 top-0 z-20">
+        <NoticeBar notice={state.notice} onDismiss={dismissNotice} />
+      </div>
       {body}
       <div className="sr-only" role="status" aria-live="polite" data-testid="live-region">
         {announcement}

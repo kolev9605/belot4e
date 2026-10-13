@@ -30,8 +30,8 @@ export function ScoreBoard({ game }: { game: TableView }) {
   const { language, t } = useLanguage();
   const contract = game.contract;
   return (
-    <section aria-label={t("label.score")} className="panel flex flex-wrap items-center justify-between gap-x-4 gap-y-0 px-3 py-1 text-sm">
-      <div className="flex flex-wrap gap-x-4">
+    <section aria-label={t("label.score")} className="panel flex items-center justify-between gap-x-4 px-3 py-1 text-sm">
+      <div className="flex shrink-0 gap-x-4">
         <span data-testid="score-ns">
           {teamName(language, "northSouth")}: <strong>{game.matchScore.northSouth}</strong>
         </span>
@@ -39,9 +39,9 @@ export function ScoreBoard({ game }: { game: TableView }) {
           {teamName(language, "eastWest")}: <strong>{game.matchScore.eastWest}</strong>
         </span>
       </div>
-      <div className="flex flex-wrap gap-x-4 text-muted">
-        <span>{t("label.deal", { number: game.dealNumber })}</span>
-        {game.heldOverPoints > 0 && <span>{t("label.heldOver", { points: game.heldOverPoints })}</span>}
+      <p className="min-w-0 truncate text-right text-muted">
+        <span className="mr-4">{t("label.deal", { number: game.dealNumber })}</span>
+        {game.heldOverPoints > 0 && <span className="mr-4">{t("label.heldOver", { points: game.heldOverPoints })}</span>}
         <span>
           {t("label.contract")}:{" "}
           {contract
@@ -51,7 +51,7 @@ export function ScoreBoard({ game }: { game: TableView }) {
               ? `${contractName(language, game.standingBid)} ${t("label.declarer", { seat: seatName(language, game.standingBidder) })}`
               : t("label.noContract")}
         </span>
-      </div>
+      </p>
     </section>
   );
 }
