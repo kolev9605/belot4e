@@ -43,7 +43,7 @@ public class ReplayAndSimulationTests
             var live = await Harness.PlayToEndAsync(table, recorder, Policies.SeededSouth(seed));
 
             var simulated = await GameRunner.RunAsync(
-                RuleSets.Bulgarian, seed, SeatPresets.Create(SeatPresets.AllBot, seed));
+                RuleSets.Bulgarian, seed, SeatPresets.Create(SeatPresets.SmartTable, seed));
 
             Assert.True(simulated.Finished, simulated.FailureDetail);
             Assert.Equal(Lines.Of(simulated.Log.Events), Lines.Of(live.Finished!.Log.Events));
@@ -72,7 +72,7 @@ public class ReplayAndSimulationTests
         Assert.Equal(33UL, log.Seed);
         Assert.Equal(RuleSets.Bulgarian.Name, log.RuleSet.Name);
         Assert.Equal("RemoteClient", log.Seats[Seat.South]);
-        Assert.All(new[] { Seat.North, Seat.East, Seat.West }, s => Assert.Equal("RandomLegalBot", log.Seats[s]));
+        Assert.All(new[] { Seat.North, Seat.East, Seat.West }, s => Assert.Equal("SmartBot", log.Seats[s]));
         Assert.Empty(log.Rejections);
         Assert.DoesNotContain("ActionRejected", log.ToJsonLinesWithRejections());
         Assert.StartsWith("{\"type\":\"header\"", log.ToJsonLines());

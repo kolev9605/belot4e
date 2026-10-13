@@ -9,12 +9,13 @@ announcements, belote, hanging points, all-tricks bonus, match to 151) with no U
 | Project | Purpose |
 |---------|---------|
 | `src/Belote.Core` | Pure rules engine: no I/O, no clock, no ambient randomness; rule values live only in the `RuleSet` object |
-| `src/Belote.Bots` | `RandomLegalBot`: picks uniformly among the legal actions of its seat's view |
+| `src/Belote.Bots` | `SmartBot`: calculated (non-random) bidding and card play from its seat's view; `RandomLegalBot`: uniform random legal baseline |
 | `src/Belote.Simulation` | Game runner, independent auditor, game log (JSON Lines), seeded batch runner, rule-set JSON |
-| `src/Belote.Simulation.Cli` | `belote-sim` command line (`run`, `replay`, `audit`) |
+| `src/Belote.Simulation.Cli` | `belote-sim` command line (`run`, `replay`, `audit`, `bench`) |
 | `src/Belote.Table` | `LiveTable`: one in-memory table (single-writer actor), per-seat views, bot driver, wire DTOs |
 | `src/Belote.Server` | ASP.NET Core + SignalR hub (`/table`) over `Belote.Table`: one player (South) vs three bots |
 | `tests/Belote.Core.Tests` | Unit tests per rule (`Rxx_*`), FsCheck properties |
+| `tests/Belote.Bots.Tests` | Smart bot: hand evaluation, card memory, bidding/play behaviour, determinism and legality |
 | `tests/Belote.Simulation.Tests` | Integration, determinism, golden logs, mixed seats, large batches |
 | `tests/Belote.Table.Tests` | Table rejections, privacy oracle, pacing/pause, concurrency, replay, equals-001 |
 | `tests/Belote.Server.Tests` | End-to-end over a real SignalR connection, incl. 100 seeded games |
@@ -50,10 +51,23 @@ dotnet run --project src/Belote.Simulation.Cli -c Release -- audit --log game.js
 
 Exit codes: `0` all games finished correctly, `1` at least one game failed a check, `2` invalid arguments.
 
+### Smart bot benchmark
+
+`SmartBot` (see `specs/004-smart-bot-ai/`) is a rule-based bot: it scores its hand per contract to
+bid, tracks the cards played, and follows Belote principles in play. It keeps no state and uses no
+randomness. `bench` plays seeded, audited games of smart bots against random-legal bots with seats
+swapped between teams:
+
+```bash
+dotnet run --project src/Belote.Simulation.Cli -c Release -- bench --games 1000 --seed 1 --min-win-rate 0.80
+# seat presets: all-smart, smart-ns, smart-ew, smart-table (random South, smart elsewhere)
+dotnet run --project src/Belote.Simulation.Cli -c Release -- run --games 500 --seats all-smart
+```
+
 ## Live table (one player against three bots)
 
 A headless server lets one connected client (South) play a full game against three
-`RandomLegalBot` seats in real time. The client sends intents only; the server validates every
+`SmartBot` seats in real time. The client sends intents only; the server validates every
 one with the rules engine and pushes that seat's view after each state change. Design and
 protocol: `specs/002-live-table-vs-bots/` (see `contracts/hub-protocol.md`).
 

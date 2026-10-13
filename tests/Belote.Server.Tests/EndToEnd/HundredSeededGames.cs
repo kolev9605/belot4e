@@ -70,7 +70,7 @@ public class HundredSeededGames
 
             // Same game as the 001 all-bot simulation of this seed.
             var simulated = await GameRunner.RunAsync(
-                RuleSets.Bulgarian, seed, SeatPresets.Create(SeatPresets.AllBot, seed));
+                RuleSets.Bulgarian, seed, SeatPresets.Create(SeatPresets.SmartTable, seed));
             Assert.True(simulated.Finished, simulated.FailureDetail);
             Assert.Equal(
                 simulated.Log.Events.Select(GameLog.EventLine),

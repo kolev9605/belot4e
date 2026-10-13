@@ -70,16 +70,24 @@ public class TrickVisibilityTests
     [Fact]
     public async Task FR027_TheEighthTrickSurvivesTheHandRollover()
     {
-        await using var table = Harness.NewTable(8);
-        var recorder = new Recorder();
-        recorder.Attach(table);
-        using var _ = table.Subscribe(recorder);
-        await Harness.PlayToEndAsync(table, recorder, Policies.First);
+        // Several seeds, so the check does not depend on one bot behaviour producing a multi-hand game.
+        var rollover = new List<(TableUpdateDto a, TableUpdateDto b)>();
+        for (ulong seed = 8; seed < 16; seed++)
+        {
+            await using var table = Harness.NewTable(seed);
+            var recorder = new Recorder();
+            recorder.Attach(table);
+            using var _ = table.Subscribe(recorder);
+            await Harness.PlayToEndAsync(table, recorder, Policies.First);
 
-        var updates = recorder.Updates;
-        var rollover = updates.Zip(updates.Skip(1), (a, b) => (a, b))
-            .Where(p => p.b.View.DealNumber > p.a.View.DealNumber && p.b.View.LastCompletedTrick is { TrickNumber: 8 })
-            .ToList();
+            var updates = recorder.Updates;
+            rollover.AddRange(updates.Zip(updates.Skip(1), (a, b) => (a, b))
+                .Where(p => p.b.View.DealNumber > p.a.View.DealNumber
+                    && p.b.View.LastCompletedTrick is { TrickNumber: 8 } last
+                    // The update in which the eighth trick completes, not a later redeal of a voided hand.
+                    && (p.a.View.LastCompletedTrick?.DealNumber != last.DealNumber
+                        || p.a.View.LastCompletedTrick?.TrickNumber != last.TrickNumber)));
+        }
 
         Assert.NotEmpty(rollover);
         Assert.All(rollover, p =>
