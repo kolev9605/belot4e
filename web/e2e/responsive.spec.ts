@@ -40,3 +40,20 @@ test("a full game can be driven with the keyboard alone", async ({ page, isMobil
   }
   await expect(page.getByTestId("result")).toBeVisible();
 });
+
+test("seats, trick area, hand and exactly one dealer marker fit the viewport", async ({ page }) => {
+  await openAndWaitConnected(page);
+  await startGame(page);
+  await expect(page.getByTestId("dealer-marker")).toHaveCount(1);
+
+  const viewport = page.viewportSize()!;
+  for (const id of ["seat-north", "seat-west", "seat-east", "seat-south"]) {
+    const box = await page.getByTestId(id).boundingBox();
+    expect(box, id).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+  }
+  const trick = await page.locator('section[aria-labelledby="trick-heading"]').boundingBox();
+  expect(trick!.x + trick!.width).toBeLessThanOrEqual(viewport.width + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+});

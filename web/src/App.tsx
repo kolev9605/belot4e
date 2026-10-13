@@ -1,21 +1,25 @@
 import { useState } from "react";
+import { LazyMotion, domMax } from "motion/react";
 import { SignalRHubClient, type HubClient } from "./connection/hubClient";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageProvider";
 import { StoreProvider, useStore } from "./state/StoreProvider";
 import { ConnectionBanner } from "./components/Chrome";
 import { Table } from "./components/Table";
+import { PacingProvider } from "./presentation/PacingProvider";
+import { PresenterProvider } from "./presentation/PresenterProvider";
+import type { PacingConfig } from "./theme/motion";
 
 function Header() {
   const { language, setLanguage, t } = useLanguage();
   return (
     <header className="flex items-center justify-between gap-2">
-      <h1 className="text-2xl font-bold">{t("app.title")}</h1>
+      <h1 className="text-2xl font-bold tracking-tight">{t("app.title")}</h1>
       <button
         type="button"
         lang={language === "en" ? "bg" : "en"}
         aria-label={t("lang.switchLabel")}
         onClick={() => setLanguage(language === "en" ? "bg" : "en")}
-        className="min-h-11 rounded border-2 border-slate-900 bg-white px-3 py-2 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+        className="btn"
       >
         {t("lang.switch")}
       </button>
@@ -26,7 +30,7 @@ function Header() {
 function Shell() {
   const { state } = useStore();
   return (
-    <main className="mx-auto min-h-screen max-w-3xl bg-slate-50 px-4 py-4 text-slate-900">
+    <main className="mx-auto min-h-screen max-w-3xl bg-page px-4 py-4 text-ink">
       <Header />
       <div className="mt-3">
         <ConnectionBanner status={state.connection} showStale={state.game !== null} />
@@ -36,13 +40,19 @@ function Shell() {
   );
 }
 
-export function App({ client }: { client?: HubClient }) {
+export function App({ client, pacing }: { client?: HubClient; pacing?: PacingConfig }) {
   const [hub] = useState<HubClient>(() => client ?? new SignalRHubClient());
   return (
     <LanguageProvider>
-      <StoreProvider client={hub}>
-        <Shell />
-      </StoreProvider>
+      <PacingProvider value={pacing}>
+        <StoreProvider client={hub}>
+          <LazyMotion features={domMax} strict>
+            <PresenterProvider>
+              <Shell />
+            </PresenterProvider>
+          </LazyMotion>
+        </StoreProvider>
+      </PacingProvider>
     </LanguageProvider>
   );
 }

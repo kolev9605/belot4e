@@ -5,8 +5,9 @@ const ACTIONS =
   'section[aria-labelledby="announce-heading"] button:enabled, ' +
   'section[aria-labelledby="hand-heading"] button:enabled';
 
-export async function openAndWaitConnected(page: Page) {
-  await page.goto("/");
+/** Opens the page; pass `{ paced: true }` to keep the real card pacing (default: instant, for speed). */
+export async function openAndWaitConnected(page: Page, options: { paced?: boolean } = {}) {
+  await page.goto(options.paced ? "/" : "/?pace=instant");
   await expect(page.getByTestId("connection-banner")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
 }
 

@@ -1,0 +1,24 @@
+/* Design tokens: one dark palette, one accent. Every text/UI pair is checked in tests/theme-contrast.test.ts. */
+@theme {
+  --color-page: #0b0f14;
+  --color-surface: #131a22;
+  --color-raised: #1c2530;
+  --color-line: #33414f;
+  --color-ink: #e8edf3;
+  --color-muted: #9fadbd;
+  --color-felt: #0f3d2e;
+  --color-felt-edge: #0a2a20;
+  --color-accent: #f5b942;
+  --color-on-accent: #1a1203;
+  --color-face: #f4f1ea;
+  --color-face-ink: #1c1f24;
+  --color-face-red: #b3261e;
+  --color-back: #24406a;
+  --color-back-line: #4a6a9c;
+  --color-danger: #ff9b92;
+  --color-warn: #ffd27a;
+  --color-focus: #7cc4ff;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius-card: 0.5rem;
+}

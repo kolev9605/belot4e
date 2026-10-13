@@ -1,9 +1,91 @@
 @import "tailwindcss";
+@import "./theme/tokens.css";
 
-/* Bare bones: no animations or transitions anywhere. */
-*,
-*::before,
-*::after {
-  animation: none !important;
-  transition: none !important;
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Felt surface: flat green with a soft vignette. */
+.felt {
+  background-color: var(--color-felt);
+  background-image: radial-gradient(ellipse at center, rgb(255 255 255 / 0.06) 0%, rgb(0 0 0 / 0.28) 100%);
+  border: 1px solid var(--color-felt-edge);
+}
+
+@layer components {
+  .panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 0.75rem;
+  }
+
+  .btn {
+    min-height: 2.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-line);
+    background-color: var(--color-raised);
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    transition: background-color 120ms, border-color 120ms;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--color-accent);
+  }
+  .btn:disabled {
+    border-style: dashed;
+    color: var(--color-muted);
+    background-color: transparent;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #ffca5c;
+  }
+  .btn-primary:disabled {
+    background-color: transparent;
+    border-color: var(--color-line);
+    color: var(--color-muted);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-line);
+    background-color: var(--color-raised);
+    padding: 0.05rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    color: var(--color-ink);
+  }
+  .chip-accent {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .heading-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }

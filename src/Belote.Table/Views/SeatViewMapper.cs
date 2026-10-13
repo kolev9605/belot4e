@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Belote.Core;
 using Belote.Simulation;
@@ -24,7 +25,7 @@ public static class SeatViewMapper
             Dealer: JsonNames.Of(view.Dealer),
             ToAct: JsonNames.Of(view.ToAct),
             DealNumber: view.DealNumber,
-            OwnHand: view.OwnHand.Select(c => c.ToString()).ToArray(),
+            OwnHand: OrderHand(view.RuleSet, view.Contract?.Kind, view.OwnHand).Select(c => c.ToString()).ToArray(),
             HandSizes: Sizes(view),
             BiddingHistory: view.BiddingHistory.Select(Bid).ToArray(),
             StandingBid: view.StandingBid is { } sb ? JsonNames.Of(sb) : null,
@@ -55,6 +56,20 @@ public static class SeatViewMapper
             HeldOverPoints: view.HeldOverPoints,
             Winner: view.Winner is { } w ? JsonNames.Of(w) : null,
             LegalActions: legal);
+    }
+
+    /// <summary>
+    /// Orders a hand grouped by suit and strongest-first within each suit for the contract in force
+    /// (no-trump order while none is decided). Card power comes from the rule set, never from the client.
+    /// </summary>
+    public static IReadOnlyList<Card> OrderHand(RuleSet rules, ContractKind? contract, IEnumerable<Card> hand)
+    {
+        var kind = contract ?? ContractKind.NoTrump;
+        return hand
+            .OrderBy(c => c.Suit)
+            .ThenByDescending(c => CardStrength.Of(rules, kind, c.Suit, c))
+            .ThenByDescending(c => c.Rank)
+            .ToArray();
     }
 
     private static HandSizesDto Sizes(SeatView view)

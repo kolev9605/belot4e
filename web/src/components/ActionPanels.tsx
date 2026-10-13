@@ -3,10 +3,7 @@ import { announceActions, bidActions } from "../state/selectors";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { actionLabel, historyLabel, publicAnnouncementLabel, announcementSpecLabel } from "./labels";
 
-const buttonClass =
-  "min-h-11 rounded border-2 border-slate-900 bg-white px-3 py-2 text-left hover:bg-yellow-100 " +
-  "focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-blue-700 " +
-  "disabled:border-dashed disabled:border-slate-400 disabled:bg-slate-100 disabled:text-slate-600";
+const buttonClass = "btn text-left";
 
 interface PanelProps {
   game: TableView;
@@ -20,12 +17,12 @@ export function BidPanel({ game, enabled, onAct, voided }: PanelProps) {
   const { language, t } = useLanguage();
   const actions = bidActions(game);
   return (
-    <section aria-labelledby="bid-heading" className="mt-4 rounded border-2 border-slate-400 bg-white p-2">
-      <h2 id="bid-heading" className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
+    <section aria-labelledby="bid-heading" className="panel mt-4 p-3">
+      <h2 id="bid-heading" className="heading-label mb-2">
         {t("label.bidding")}
       </h2>
       {voided && (
-        <p role="status" className="mb-2 font-semibold">
+        <p role="status" className="mb-2 font-semibold text-warn">
           {t("label.voided")}
         </p>
       )}
@@ -62,8 +59,8 @@ export function AnnouncePanel({ game, enabled, onAct }: Omit<PanelProps, "voided
   const actions = announceActions(game);
   if (actions.length === 0 && game.announcements.length === 0 && game.ownDeclared.length === 0) return null;
   return (
-    <section aria-labelledby="announce-heading" className="mt-4 rounded border-2 border-slate-400 bg-white p-2">
-      <h2 id="announce-heading" className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
+    <section aria-labelledby="announce-heading" className="panel mt-4 p-3">
+      <h2 id="announce-heading" className="heading-label mb-2">
         {t("label.announcements")}
       </h2>
       {game.announcements.length > 0 && (
