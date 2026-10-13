@@ -89,7 +89,8 @@ public sealed record SeatView(
     ImmutableArray<BeloteAward> Belotes,
     ImmutableArray<int> MatchScore,
     int HeldOverPoints,
-    Team? Winner)
+    Team? Winner,
+    ImmutableArray<int> HandSizes = default)
 {
     public bool IsMyTurn => Phase != Phase.Finished && ToAct == Seat;
 }

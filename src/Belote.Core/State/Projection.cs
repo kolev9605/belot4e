@@ -26,6 +26,11 @@ public static class Projection
             .Select(d => d.Spec)
             .ToImmutableArray();
 
+        // Public information: how many cards each seat holds (counts only, never identities).
+        var sizes = hand.Hands
+            .Select(h => hand.Contract is null && h.Length > hand.DealtCount ? hand.DealtCount : h.Length)
+            .ToImmutableArray();
+
         return new SeatView(
             RuleSet: state.RuleSet,
             Seat: seat,
@@ -48,6 +53,7 @@ public static class Projection
             Belotes: hand.Belotes,
             MatchScore: state.MatchScore,
             HeldOverPoints: state.HeldOverPoints,
-            Winner: state.Winner);
+            Winner: state.Winner,
+            HandSizes: sizes);
     }
 }

@@ -108,3 +108,13 @@ Every rejection leaves table state, version, and log byte-identical; nothing is 
   of protocol v1.
 - The hub allows concurrent invocations on one connection so bursts reach the table, which
   serialises them (FR-014).
+
+## Amendments from feature 003 (additive, protocol stays v1)
+
+- The view carries `handSizes` (`{north,east,south,west}` card counts; counts only).
+- `CreateTable` from a connection other than the current owner replaces an unfinished table;
+  the owner's own `CreateTable` while unfinished still returns `tableExists`.
+- A displaced, still-connected owner receives `TableClosed { protocolVersion, reason: "replaced" }`
+  and afterwards gets `notSeated`.
+
+See [003 hub-client contract](../../003-playable-table-ui/contracts/hub-client.md).

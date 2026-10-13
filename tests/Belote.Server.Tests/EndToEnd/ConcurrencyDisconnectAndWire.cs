@@ -75,12 +75,12 @@ public class ConcurrencyDisconnectAndWire
         await Task.Delay(400);
         Assert.Same(frozen, table.Snapshot);
 
-        // The host is unaffected: a new connection can talk to it (the unfinished table still blocks creation).
+        // The host is unaffected: a new connection is not blocked by the abandoned game (feature 003, FR-023).
         await using var other = await TableClient.ConnectAsync(server.HubUrl);
-        var refused = await other.CreateTableAsync(9, botDelayMs: 0);
-        Assert.Equal("tableExists", refused.Rejection!.Category);
         var view = await other.GetViewAsync();
         Assert.Equal("notSeated", view.Rejection!.Category);
+        var created = await other.CreateTableAsync(9, botDelayMs: 0);
+        Assert.True(created.Ok, created.Rejection?.Code);
     }
 
     [Fact]

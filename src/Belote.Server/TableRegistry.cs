@@ -24,10 +24,12 @@ public sealed class TableServerOptions
 
 /// <summary>
 /// Holds the single active table and the finished-game store. At most one unfinished table exists;
-/// a table is replaced only after its game has finished.
+/// a table is replaced after its game has finished, or by a different connection's CreateTable.
 /// </summary>
 public sealed class TableRegistry
 {
+    public const string TableClosedMethod = "TableClosed";
+
     private readonly object _gate = new();
     private readonly IHubContext<TableHub> _hub;
     private readonly TableServerOptions _options;
@@ -68,14 +70,24 @@ public sealed class TableRegistry
         LiveTable? old;
         ClientUpdatePump? oldPump;
         IDisposable? oldSubscription;
+        string? displacedConnectionId = null;
         lock (_gate)
         {
-            if (_table is { } existing
-                && existing.Snapshot.Lifecycle is TableLifecycle.AwaitingSeat or TableLifecycle.InProgress)
+            var unfinished = _table is { } current
+                && current.Snapshot.Lifecycle is TableLifecycle.AwaitingSeat or TableLifecycle.InProgress;
+
+            // The owner may not abandon its own live game by creating another one; any other
+            // connection (e.g. after a refresh or a network cut) takes over from an unfinished table.
+            if (unfinished && _ownerConnectionId == connectionId)
             {
                 var rejection = new Rejection(
                     RejectionCategory.TableExists, "TableExists", "A game is already in progress at this server.");
                 return new CreateTableResultDto(false, null, rejection.ToDto());
+            }
+
+            if (unfinished)
+            {
+                displacedConnectionId = _ownerConnectionId;
             }
 
             old = _table;
@@ -111,6 +123,20 @@ public sealed class TableRegistry
         if (old is not null)
         {
             await old.DisposeAsync().ConfigureAwait(false);
+        }
+
+        if (displacedConnectionId is not null)
+        {
+            try
+            {
+                await _hub.Clients.Client(displacedConnectionId)
+                    .SendAsync(TableClosedMethod, new TableClosedDto(TableUpdateDto.CurrentProtocolVersion, "replaced"))
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogDebug(ex, "Could not notify displaced connection {ConnectionId}", displacedConnectionId);
+            }
         }
 
         _log.LogInformation("Table {TableId} created", table.Id);

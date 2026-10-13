@@ -25,6 +25,7 @@ public static class SeatViewMapper
             ToAct: JsonNames.Of(view.ToAct),
             DealNumber: view.DealNumber,
             OwnHand: view.OwnHand.Select(c => c.ToString()).ToArray(),
+            HandSizes: Sizes(view),
             BiddingHistory: view.BiddingHistory.Select(Bid).ToArray(),
             StandingBid: view.StandingBid is { } sb ? JsonNames.Of(sb) : null,
             StandingBidder: view.StandingBidder is { } who ? JsonNames.Of(who) : null,
@@ -54,6 +55,14 @@ public static class SeatViewMapper
             HeldOverPoints: view.HeldOverPoints,
             Winner: view.Winner is { } w ? JsonNames.Of(w) : null,
             LegalActions: legal);
+    }
+
+    private static HandSizesDto Sizes(SeatView view)
+    {
+        var s = view.HandSizes;
+        return s.IsDefault
+            ? new HandSizesDto(0, 0, 0, 0)
+            : new HandSizesDto(s[(int)Seat.North], s[(int)Seat.East], s[(int)Seat.South], s[(int)Seat.West]);
     }
 
     public static AnnouncementSpecDto Spec(AnnouncementSpec spec) =>
