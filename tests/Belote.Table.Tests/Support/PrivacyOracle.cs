@@ -35,8 +35,10 @@ internal static class PrivacyOracle
         }
 
         int? previousDeal = update.View.LastCompletedTrick?.DealNumber;
+        // The summary of a scored hand may show every card that was played in that deal.
+        int? summarisedDeal = update.View.LastHand?.DealNumber;
         foreach (var played in eventsUpToUpdate.OfType<CardPlayed>()
-                     .Where(e => e.Deal == deal || e.Deal == previousDeal))
+                     .Where(e => e.Deal == deal || e.Deal == previousDeal || e.Deal == summarisedDeal))
         {
             allowed.Add(played.Card.ToString());
         }

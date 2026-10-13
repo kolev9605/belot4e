@@ -31,11 +31,11 @@ export function TrickArea({ trick }: TrickAreaProps) {
   const showWinner = winner !== null && trick.mode !== "live";
 
   return (
-    <section aria-labelledby="trick-heading" className="felt relative rounded-2xl p-3">
-      <h2 id="trick-heading" className="heading-label !text-white/70">
+    <section aria-labelledby="trick-heading" className="felt relative flex min-h-0 flex-col rounded-2xl p-2">
+      <h2 id="trick-heading" className="sr-only">
         {t("label.table")}
       </h2>
-      <div className="mx-auto grid min-h-[13.5rem] max-w-[17rem] grid-cols-3 grid-rows-3 place-items-center gap-0.5 sm:min-h-[16.5rem] sm:max-w-[20rem]">
+      <div className="mx-auto grid min-h-0 w-full max-w-[22rem] flex-1 grid-cols-3 grid-rows-3 place-items-center gap-0.5">
         {trick.plays.length === 0 && (
           <p className="col-span-3 col-start-1 row-start-2 text-center text-sm text-white/70">{t("label.noCards")}</p>
         )}
@@ -77,7 +77,7 @@ export function TrickArea({ trick }: TrickAreaProps) {
         })}
       </div>
       <p
-        className="mt-1 min-h-6 text-center text-sm font-semibold text-accent"
+        className="min-h-5 text-center text-sm font-semibold text-accent"
         data-testid="trick-winner"
         aria-live="off"
       >

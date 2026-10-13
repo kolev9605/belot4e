@@ -3,7 +3,7 @@ import { diffViews, type PresentationStep } from "../src/presentation/steps";
 import { compressionScale, stepDuration } from "../src/presentation/usePresenter";
 import { DEFAULT_PACING, INSTANT_PACING } from "../src/theme/motion";
 import type { CompletedTrick, TableView } from "../src/protocol/types";
-import { makeView } from "./fixtures";
+import { makeSummary, makeView } from "./fixtures";
 
 const kinds = (prev: TableView | null, next: TableView) => diffViews(prev, next).map((s) => s.kind);
 
@@ -103,5 +103,79 @@ describe("step timing", () => {
     expect(compressionScale(3)).toBe(1);
     expect(compressionScale(6)).toBeCloseTo(0.5);
     expect(compressionScale(100)).toBe(0.4);
+  });
+});
+
+describe("bid steps (spec 006 US4)", () => {
+  const bidding = (history: TableView["biddingHistory"], extra: Partial<TableView> = {}) =>
+    makeView({ phase: "bidding", contract: null, currentTrick: [], biddingHistory: history, ...extra });
+  const call = (seat: TableView["biddingHistory"][number]["seat"], action = "pass") => ({ seat, action, contract: null });
+
+  it("emits one bid step per new call, in order, before the rest of the change", () => {
+    const prev = bidding([call("west")]);
+    const next = bidding([call("west"), call("north"), call("east")]);
+    const steps = diffViews(prev, next);
+    expect(steps.map((s) => s.kind)).toEqual(["bid", "bid", "snap"]);
+    expect(steps[0]!.frame.view.biddingHistory.map((e) => e.seat)).toEqual(["west", "north"]);
+    expect(steps[1]!.frame.view.biddingHistory.map((e) => e.seat)).toEqual(["west", "north", "east"]);
+  });
+
+  it("emits no bid step when the history is unchanged or was reset", () => {
+    const history = [call("west"), call("north")];
+    expect(kinds(bidding(history), bidding(history, { toAct: "east" }))).toEqual(["snap"]);
+    expect(kinds(bidding(history), bidding([], { dealNumber: 2 }))).toEqual(["deal", "settle"]);
+  });
+
+  it("holds a bot's call for bidHoldMs and never delays the person's own call", () => {
+    const bot = diffViews(bidding([]), bidding([call("west")]))[0]!;
+    const own = diffViews(bidding([]), bidding([call("south")]))[0]!;
+    expect(stepDuration(bot, DEFAULT_PACING)).toBe(DEFAULT_PACING.bidHoldMs);
+    expect(stepDuration(own, DEFAULT_PACING)).toBe(0);
+    expect(stepDuration(bot, INSTANT_PACING)).toBe(0);
+  });
+});
+
+describe("result step (spec 006 US5)", () => {
+  const last = trick(8, "east", 1);
+  const summary = makeSummary({ dealNumber: 1 });
+
+  it("comes after the last trick and before the next deal", () => {
+    const prev = makeView({ currentTrick: last.plays.slice(0, 3), dealNumber: 1 });
+    const next = makeView({
+      dealNumber: 2,
+      dealer: "north",
+      currentTrick: [],
+      completedTricks: [],
+      lastCompletedTrick: last,
+      lastHand: summary,
+    });
+    const steps = diffViews(prev, next);
+    expect(steps.map((s) => s.kind)).toEqual(["play", "hold", "collect", "result", "deal", "settle"]);
+    expect(steps[3]!.frame.result).toEqual(summary);
+    expect(steps[3]!.frame.view.ownHand).toEqual([]);
+  });
+
+  it("closes a finished game with the result and no deal", () => {
+    const prev = makeView({ currentTrick: last.plays.slice(0, 3), completedTricks: Array.from({ length: 7 }, (_, i) => trick(i + 1)) });
+    const finished = makeSummary({ dealNumber: 1, winner: "eastWest" });
+    const next = makeView({
+      phase: "finished",
+      currentTrick: [],
+      completedTricks: [...Array.from({ length: 7 }, (_, i) => trick(i + 1)), last],
+      lastCompletedTrick: last,
+      lastHand: finished,
+      winner: "eastWest",
+      legalActions: [],
+    });
+    const steps = diffViews(prev, next);
+    expect(steps.map((s) => s.kind)).toEqual(["play", "hold", "collect", "result", "settle"]);
+    expect(steps[3]!.frame.result?.winner).toBe("eastWest");
+  });
+
+  it("is not emitted for a first view, an unchanged summary or a missing one", () => {
+    expect(kinds(null, makeView({ lastHand: summary }))).toEqual(["deal", "settle"]);
+    const prev = makeView({ lastHand: summary });
+    expect(kinds(prev, makeView({ dealNumber: 2, lastHand: summary }))).toEqual(["deal", "settle"]);
+    expect(kinds(makeView(), makeView({ dealNumber: 2, lastHand: null }))).toEqual(["deal", "settle"]);
   });
 });

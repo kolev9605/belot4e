@@ -62,6 +62,22 @@ export function historyLabel(language: Language, entry: BidEntry): string {
   }
 }
 
+/** One call as shown inside its seat box (the seat is implied by where it appears). */
+export function callLabel(language: Language, entry: BidEntry): string {
+  switch (entry.action) {
+    case "pass":
+      return translate(language, "call.pass");
+    case "bid":
+      return translate(language, "call.bid", { contract: contractName(language, entry.contract ?? "") });
+    case "contra":
+      return translate(language, "call.contra");
+    case "recontra":
+      return translate(language, "call.recontra");
+    default:
+      return entry.action;
+  }
+}
+
 export function publicAnnouncementLabel(language: Language, a: PublicAnnouncement): string {
   const seat = seatName(language, a.seat);
   if (a.revealed) {

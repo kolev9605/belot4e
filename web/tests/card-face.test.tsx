@@ -35,8 +35,8 @@ describe("card face (US4)", () => {
   it("keeps the playable and not-playable wording on hand cards", () => {
     renderInLanguage(
       <>
-        <HandCard card="QH" playable enabled onPlay={() => undefined} />
-        <HandCard card="7C" playable={false} enabled onPlay={() => undefined} />
+        <HandCard card="QH" mode="playable" enabled onPlay={() => undefined} />
+        <HandCard card="7C" mode="unplayable" enabled onPlay={() => undefined} />
       </>,
     );
     expect(screen.getByRole("button", { name: /Queen of Hearts/ })).toBeEnabled();

@@ -66,6 +66,40 @@ export interface IntentDto {
   card?: Card | null;
 }
 
+export interface TeamHand {
+  /** Every card the team won in the hand, in trick order. */
+  wonCards: Card[];
+  cardPoints: number;
+  lastTrickBonus: number;
+  announcementPoints: number;
+  belotePoints: number;
+  allTricksBonus: number;
+  rawTotal: number;
+  /** Game points awarded to the team for the hand. */
+  gamePoints: number;
+}
+
+export interface HeldOverSummary {
+  before: number;
+  awarded: number;
+  awardedTo: Team | null;
+  newlyHeld: number;
+  after: number;
+}
+
+/** The most recently scored hand; played cards and engine-computed numbers only. */
+export interface HandSummary {
+  dealNumber: number;
+  contract: { kind: ContractKind; declarer: Seat; multiplier: number };
+  declaringTeam: Team;
+  outcome: "made" | "failed" | "tied";
+  teams: { northSouth: TeamHand; eastWest: TeamHand };
+  /** Running totals after this hand. */
+  matchScore: Score;
+  heldOver: HeldOverSummary;
+  winner: Team | null;
+}
+
 export interface TableView {
   seat: Seat;
   phase: Phase;
@@ -90,6 +124,8 @@ export interface TableView {
   matchScore: Score;
   heldOverPoints: number;
   winner: Team | null;
+  /** Null before the first hand is scored; older servers omit it. */
+  lastHand?: HandSummary | null;
   legalActions: IntentDto[];
 }
 

@@ -54,35 +54,8 @@ jobs:
       - name: Build
         run: npm run build
 
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build server
-        run: dotnet build src/Belote.Server -c Release
-      - name: Build client
-        working-directory: web
-        run: |
-          npm ci
-          npm run build
-          npx playwright install --with-deps chromium
-      - name: End-to-end tests (full game, recovery, phone viewport, hidden information)
-        working-directory: web
-        run: npm run e2e
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: web/test-results/
+  # The Playwright end-to-end suite is intentionally not run in CI (it is slow). Run it locally
+  # with `npm run e2e` in web/ when a change touches the browser flow.
 
   nightly-batch:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

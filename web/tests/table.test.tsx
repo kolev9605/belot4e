@@ -80,7 +80,8 @@ describe("table rendering (US1)", () => {
         ],
       }),
     );
-    expect(screen.getByText("West: pass")).toBeInTheDocument();
+    // The call history lives in the seat boxes now.
+    expect(screen.getByTestId("seat-calls-west")).toHaveTextContent("Pass");
     await userEvent.click(screen.getByRole("button", { name: "Bid Hearts" }));
     expect(client.submitted).toEqual([{ kind: "bid", seat: "south", contract: "hearts" }]);
   });
@@ -95,7 +96,7 @@ describe("table rendering (US1)", () => {
     expect(result).toHaveTextContent("North–South win");
     expect(result).toHaveTextContent("151 – 90");
     expect(screen.getByRole("button", { name: "Play again" })).toBeEnabled();
-    for (const card of screen.getAllByRole("button", { name: /playable/ })) {
+    for (const card of screen.getAllByRole("button", { name: /of (Spades|Hearts|Clubs|Diamonds)$/ })) {
       expect(card).toBeDisabled();
     }
   });

@@ -8,6 +8,8 @@ export interface PresenterOutput {
   frame: Frame | null;
   /** True when nothing is queued or running and the drawn frame is the latest view. */
   settled: boolean;
+  /** Lets the presenter move on from a blocking step (the hand-result pop-up). */
+  release: () => void;
 }
 
 /** How long a step stays on screen before the next one may replace it. */
@@ -28,6 +30,10 @@ export function stepDuration(step: PresentationStep, pacing: PacingConfig, scale
       break;
     case "snap":
       ms = pacing.snapMs;
+      break;
+    case "bid":
+      // The person's own call is never delayed: only the bots' calls are held for reading.
+      ms = step.frame.view.biddingHistory.at(-1)?.seat === "south" ? 0 : pacing.bidHoldMs;
       break;
     default:
       ms = 0;
@@ -54,6 +60,8 @@ export function usePresenter(
   const [busy, setBusy] = useState(false);
   const queue = useRef<PresentationStep[]>([]);
   const running = useRef(false);
+  /** A blocking step (the result pop-up) is showing; the queue waits for `release`. */
+  const blocking = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const basis = useRef<TableView | null>(null);
   const pacingRef = useRef(pacing);
@@ -64,6 +72,7 @@ export function usePresenter(
     timer.current = null;
     queue.current = [];
     running.current = false;
+    blocking.current = false;
     basis.current = null;
     setFrame(null);
     setBusy(false);
@@ -74,6 +83,13 @@ export function usePresenter(
     let last: PresentationStep | null = null;
     while (queue.current.length > 0) {
       const step = queue.current.shift()!;
+      if (step.kind === "result") {
+        setFrame(step.frame);
+        running.current = true;
+        blocking.current = true;
+        setBusy(true);
+        return;
+      }
       const ms = stepDuration(step, pacingRef.current, compressionScale(queue.current.length + 1));
       last = step;
       if (ms <= 0) continue;
@@ -90,6 +106,18 @@ export function usePresenter(
     if (last) setFrame(last.frame);
     setBusy(false);
   }, []);
+
+  const release = useCallback(() => {
+    if (!blocking.current) return;
+    blocking.current = false;
+    running.current = false;
+    if (queue.current.length === 0) {
+      setFrame(null);
+      setBusy(false);
+      return;
+    }
+    pump();
+  }, [pump]);
 
   useEffect(() => {
     if (!active || !game) {
@@ -119,5 +147,5 @@ export function usePresenter(
   );
 
   const settled = !busy && queue.current.length === 0 && (frame === null || frame.view === game);
-  return { frame, settled };
+  return { frame, settled, release };
 }

@@ -304,7 +304,8 @@ public sealed class LiveTable : IAsyncDisposable
             last,
             finished ? TableLifecycle.Finished : TableLifecycle.InProgress,
             false,
-            snap.Events.AddRange(accepted.Events));
+            snap.Events.AddRange(accepted.Events),
+            NextLastHand(snap, state, intent, accepted));
 
         Publish(next);
         FinishedGame? game = null;
@@ -370,6 +371,39 @@ public sealed class LiveTable : IAsyncDisposable
         return new CompletedTrick(before.DealNumber, won.TrickNumber, before.Hand.Leader, plays, won.Winner);
     }
 
+    /// <summary>
+    /// Summarises the hand when this move scored it (the hand's last card was played); otherwise keeps the
+    /// previous summary, so a voided hand never replaces it.
+    /// </summary>
+    private static HandSummary? NextLastHand(TableSnapshot snap, GameState before, Intent intent, Belote.Core.Accepted accepted)
+    {
+        var scored = accepted.Events.OfType<HandScored>().FirstOrDefault();
+        if (scored is null || intent.Action is not PlayCardAction play || before.Hand.Contract is not { } contract)
+        {
+            return snap.LastHand;
+        }
+
+        var won = accepted.Events.OfType<TrickWon>().First();
+        var lastTrick = new Trick(
+            before.Hand.Leader,
+            before.Hand.CurrentPlays.Add(new PlayedCard(intent.Seat, play.Card)),
+            won.Winner);
+
+        var cards = new List<Card>[] { new(), new() };
+        foreach (var trick in before.Hand.Tricks.Add(lastTrick))
+        {
+            cards[(int)trick.Winner.GetTeam()].AddRange(trick.Plays.Select(p => p.Card));
+        }
+
+        return new HandSummary(
+            before.DealNumber,
+            contract,
+            scored.Result,
+            ImmutableArray.Create(cards[0].ToImmutableArray(), cards[1].ToImmutableArray()),
+            accepted.State.MatchScore,
+            accepted.State.Winner);
+    }
+
     private FinishedGame BuildFinished(TableSnapshot snap)
     {
         var state = snap.State!;
@@ -383,7 +417,7 @@ public sealed class LiveTable : IAsyncDisposable
     private TableUpdateDto BuildUpdate(TableSnapshot snap)
     {
         var view = Projection.For(snap.State!, ClientSeat);
-        return SeatViewMapper.ToUpdate(snap.Version, view, snap.LastCompletedTrick);
+        return SeatViewMapper.ToUpdate(snap.Version, view, snap.LastCompletedTrick, snap.LastHand);
     }
 
     private void Publish(TableSnapshot snapshot)

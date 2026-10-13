@@ -4,7 +4,7 @@ import { isMyTeam } from "../theme/geometry";
 import { CardBack } from "./Card";
 import { CardFan } from "./CardFan";
 import { DealerMarker } from "./DealerMarker";
-import { seatName } from "./labels";
+import { callLabel, seatName } from "./labels";
 
 interface SeatPanelProps {
   seat: SeatId;
@@ -21,16 +21,18 @@ export function SeatPanel({ seat, game, dealing = false, perSeat = 0 }: SeatPane
   const mine = isMyTeam(seat);
   const isDealer = game.dealer === seat;
   const side = seat === "west" || seat === "east";
+  // Every call this seat made in the current bidding round, in the order made.
+  const calls = game.biddingHistory.filter((entry) => entry.seat === seat);
 
   return (
     <div
       data-testid={`seat-${seat}`}
       data-turn={toAct ? "true" : undefined}
-      className={`panel flex flex-col items-center gap-1 px-2 py-1.5 text-center ${
+      className={`panel flex flex-col items-center gap-0.5 px-2 py-1 text-center ${
         toAct ? "!border-accent shadow-[0_0_0_2px_var(--color-accent)]" : ""
-      } ${side ? "w-[4.75rem] sm:w-28" : ""}`}
+      } ${side ? "w-[5.5rem] sm:w-28" : ""}`}
     >
-      <div className="flex flex-wrap items-center justify-center gap-x-1 text-sm font-semibold">
+      <div className="flex flex-wrap items-center justify-center gap-x-1 text-sm font-semibold leading-tight">
         <span>{seatName(language, seat)}</span>
         <span className="text-xs font-normal text-muted">({role})</span>
       </div>
@@ -39,6 +41,26 @@ export function SeatPanel({ seat, game, dealing = false, perSeat = 0 }: SeatPane
         {isDealer && <DealerMarker />}
         {toAct && <span className="chip chip-accent">{t("label.turn")}</span>}
       </div>
+      {calls.length > 0 && (
+        <ul
+          aria-label={t("label.calls")}
+          data-testid={`seat-calls-${seat}`}
+          className="flex flex-wrap items-center justify-center gap-1"
+        >
+          {calls.map((entry, i) => {
+            const latest = i === calls.length - 1;
+            return (
+              <li
+                key={i}
+                data-latest={latest ? "true" : undefined}
+                className={`chip ${latest ? "chip-accent font-semibold" : "text-muted"}`}
+              >
+                {callLabel(language, entry)}
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {seat !== "south" && (
         <CardFan
           seat={seat}

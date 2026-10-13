@@ -34,6 +34,8 @@ describe("theme contrast (WCAG AA)", () => {
     ["muted", "raised"],
     ["accent", "page"],
     ["accent", "surface"],
+    ["accent", "raised"],
+    ["warn", "felt"],
     ["on-accent", "accent"],
     ["face-ink", "face"],
     ["face-red", "face"],

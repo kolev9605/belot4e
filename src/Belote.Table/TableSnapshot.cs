@@ -20,6 +20,18 @@ public sealed record CompletedTrick(
     Seat Winner);
 
 /// <summary>
+/// The most recently scored hand: the engine's own <see cref="HandResult"/> plus the cards each team won
+/// (indexed by <see cref="Team"/>, in trick order). Only cards that were played face-up appear here.
+/// </summary>
+public sealed record HandSummary(
+    int DealNumber,
+    Contract Contract,
+    HandResult Result,
+    ImmutableArray<ImmutableArray<Card>> WonCards,
+    ImmutableArray<int> MatchScore,
+    Team? Winner);
+
+/// <summary>
 /// The immutable state of a table, published atomically after every change. <see cref="Version"/>
 /// increases by exactly one per accepted intent; pausing changes <see cref="Paused"/> only.
 /// </summary>
@@ -29,4 +41,5 @@ public sealed record TableSnapshot(
     CompletedTrick? LastCompletedTrick,
     TableLifecycle Lifecycle,
     bool Paused,
-    ImmutableList<GameEvent> Events);
+    ImmutableList<GameEvent> Events,
+    HandSummary? LastHand = null);

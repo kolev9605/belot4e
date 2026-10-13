@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "../src/App";
@@ -28,7 +28,9 @@ describe("rules are server-driven (US2)", () => {
     const client = await mount();
     await push(client, makeUpdate(0, { legalActions: [], toAct: "east" }));
     expect(screen.getByTestId("status")).toHaveTextContent("Waiting for East");
-    for (const card of screen.getAllByRole("button", { name: /playable/ })) {
+    // Another seat's turn: cards are shown normally (no playable/not-playable wording) and cannot be used.
+    expect(screen.queryByRole("button", { name: /playable/ })).toBeNull();
+    for (const card of screen.getAllByRole("button", { name: /of (Spades|Hearts|Clubs|Diamonds)$/ })) {
       expect(card).toBeDisabled();
     }
     expect(screen.queryByRole("button", { name: /^Bid / })).toBeNull();
@@ -214,5 +216,36 @@ describe("language and accessibility (US4)", () => {
     expect(card).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(client.submitted.at(-1)).toEqual({ kind: "play", seat: "south", card: "QH" });
+  });
+});
+
+describe("cards while bidding (spec 006 US3)", () => {
+  it("shows every card normally: no playable wording, no struck line, no dimming", async () => {
+    const client = await mount();
+    await push(
+      client,
+      makeUpdate(0, {
+        phase: "bidding",
+        contract: null,
+        biddingHistory: [],
+        legalActions: [{ kind: "pass", seat: "south" }],
+      }),
+    );
+    const hand = screen.getByTestId("hand");
+    const cards = within(hand).getAllByRole("button");
+    expect(cards).toHaveLength(5);
+    for (const card of cards) {
+      expect(card).toHaveAttribute("data-mode", "inert");
+      expect(card.getAttribute("aria-label")).toMatch(/^(Ace|Ten|Queen|Seven|Eight) of /);
+      expect(card).not.toHaveTextContent("not playable");
+      expect(card.className).not.toMatch(/opacity-/);
+    }
+  });
+
+  it("highlights legal cards and marks the rest unavailable only on the person's turn to play", async () => {
+    const client = await mount();
+    await push(client, makeUpdate(0));
+    expect(screen.getByRole("button", { name: "Queen of Hearts, playable" })).toHaveAttribute("data-mode", "playable");
+    expect(screen.getByRole("button", { name: "Ace of Spades, not playable" })).toHaveAttribute("data-mode", "unplayable");
   });
 });

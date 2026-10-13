@@ -16,7 +16,7 @@ export function ConnectionBanner({ status, showStale }: { status: ConnectionStat
       aria-live="polite"
       data-testid="connection-banner"
       data-status={status}
-      className={`rounded-lg border px-3 py-2 text-sm ${
+      className={`rounded-lg border px-2 py-0.5 text-xs ${
         ok ? "border-line bg-surface text-muted" : "border-warn bg-surface font-semibold text-warn"
       }`}
     >
@@ -30,8 +30,8 @@ export function ScoreBoard({ game }: { game: TableView }) {
   const { language, t } = useLanguage();
   const contract = game.contract;
   return (
-    <section aria-label={t("label.score")} className="panel p-3 text-sm">
-      <div className="flex flex-wrap justify-between gap-x-4">
+    <section aria-label={t("label.score")} className="panel flex flex-wrap items-center justify-between gap-x-4 gap-y-0 px-3 py-1 text-sm">
+      <div className="flex flex-wrap gap-x-4">
         <span data-testid="score-ns">
           {teamName(language, "northSouth")}: <strong>{game.matchScore.northSouth}</strong>
         </span>
@@ -39,7 +39,7 @@ export function ScoreBoard({ game }: { game: TableView }) {
           {teamName(language, "eastWest")}: <strong>{game.matchScore.eastWest}</strong>
         </span>
       </div>
-      <div className="mt-1 flex flex-wrap justify-between gap-x-4 text-muted">
+      <div className="flex flex-wrap gap-x-4 text-muted">
         <span>{t("label.deal", { number: game.dealNumber })}</span>
         {game.heldOverPoints > 0 && <span>{t("label.heldOver", { points: game.heldOverPoints })}</span>}
         <span>

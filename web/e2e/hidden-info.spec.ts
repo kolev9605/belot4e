@@ -27,8 +27,10 @@ test("received frames never contain a card outside the viewer's hand or the publ
   }
   expect(updates.length).toBeGreaterThan(10);
 
+  // Cards that have been played face-up at any point so far: the only cards a hand summary may hold.
+  const playedSoFar = new Set<string>();
   for (const update of updates as Array<{ view: Record<string, unknown> }>) {
-    const view = update.view;
+    const { lastHand, ...view } = update.view;
     const allowed = new Set<string>();
     const collect = (value: unknown) => {
       if (typeof value === "string" && CARD.test(value)) allowed.add(value);
@@ -37,6 +39,24 @@ test("received frames never contain a card outside the viewer's hand or the publ
     };
     for (const key of ["ownHand", "currentTrick", "lastCompletedTrick", "completedTricks", "legalActions"]) {
       collect(view[key]);
+    }
+    const played = (value: unknown) => {
+      if (typeof value === "string" && CARD.test(value)) playedSoFar.add(value);
+      else if (Array.isArray(value)) value.forEach(played);
+      else if (value && typeof value === "object") Object.values(value).forEach(played);
+    };
+    for (const key of ["currentTrick", "lastCompletedTrick", "completedTricks"]) played(view[key]);
+
+    // The summary of a scored hand holds only cards already played face-up.
+    if (lastHand) {
+      const summarised = new Set<string>();
+      const grab = (value: unknown) => {
+        if (typeof value === "string" && CARD.test(value)) summarised.add(value);
+        else if (Array.isArray(value)) value.forEach(grab);
+        else if (value && typeof value === "object") Object.values(value).forEach(grab);
+      };
+      grab(lastHand);
+      for (const card of summarised) expect(playedSoFar.has(card)).toBe(true);
     }
 
     const seen = new Set<string>();
