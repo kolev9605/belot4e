@@ -24,6 +24,21 @@ no game rules.
   are shown at a readable pace; input is enabled only once the table has settled on the latest view
 - `src/theme` design tokens (`tokens.css`, one dark palette and accent), pacing values (`motion.ts`) and geometry
 
+## Rooms and multiplayer (spec 007)
+
+- The app has two routes: `/` (main menu: Start game, Join game, Return to your game) and `/room/<guid>`
+  (deep link). Routing is the History API in `src/routing/router.ts`; `parseRoomLink` accepts a bare guid or a
+  pasted link.
+- Identity is a random token kept in `localStorage` (`src/session/storage.ts`: `belote.identity.v1`,
+  `belote.profile.v1` for the name, `belote.session.v1` for the last room). Every connect and reconnect calls
+  `rejoin` with that token; the connection id is never an identity. Storage failures degrade to "no resume".
+- Views are rotated at the boundary (`src/protocol/perspective.ts`) so the person is always drawn at the bottom
+  as "south"; outgoing intents are rotated back. The rest of the UI keeps assuming the viewer sits south.
+- Display names come from the room state (`seatLabels` in `src/state/selectors.ts`); without a room the compass
+  names remain.
+- While the connection is down the table stays visible and inert behind a reconnecting overlay; a missing
+  player pauses the table with a countdown computed from the server's deadline and clock offset.
+
 ## Pacing and theme
 
 - Card pacing defaults live in `src/theme/motion.ts` (`DEFAULT_PACING`). `?pace=instant` in the page address

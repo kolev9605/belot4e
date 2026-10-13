@@ -1,8 +1,11 @@
+import { rotateView } from "../protocol/perspective";
 import {
   isSupportedUpdate,
   type ConnectionStatus,
   type IntentDto,
   type IntentResult,
+  type RoomState,
+  type Seat,
   type TableUpdate,
   type TableView,
 } from "../protocol/types";
@@ -11,8 +14,11 @@ export type Session = "idle" | "starting" | "playing" | "finished" | "lost";
 
 export type LostReason = "dropped" | "replaced" | "unknown";
 
+export type RoomErrorKind = "notFound" | "ended" | "full";
+
 export type Notice =
   | { kind: "rejection"; code: string }
+  | { kind: "roomRejection"; code: string }
   | { kind: "versionMismatch" }
   | { kind: "startFailed"; code?: string }
   | { kind: "error" };
@@ -35,6 +41,20 @@ export interface AppState {
   needsResync: boolean;
   /** The protocol version is unsupported; input stays disabled. */
   blocked: boolean;
+
+  // ---- rooms -------------------------------------------------------------------------------
+  /** The seat the server knows this person by (the shown view is rotated so this is "south"). */
+  viewer: Seat | null;
+  room: RoomState | null;
+  /** serverNow - clientNow at the last room push, for countdowns that survive clock skew. */
+  clockOffsetMs: number;
+  /** Another tab took this person over; this tab must not rejoin on its own. */
+  superseded: boolean;
+  roomError: RoomErrorKind | null;
+  /** A name is needed (none saved, or the saved one was refused) before joining. */
+  needsName: { code: string | null } | null;
+  /** Moves a bot made for this person while they were away; shown once. */
+  awayRecap: number | null;
 }
 
 export const initialState: AppState = {
@@ -47,6 +67,13 @@ export const initialState: AppState = {
   notice: null,
   needsResync: false,
   blocked: false,
+  viewer: null,
+  room: null,
+  clockOffsetMs: 0,
+  superseded: false,
+  roomError: null,
+  needsName: null,
+  awayRecap: null,
 };
 
 export type Action =
@@ -60,7 +87,15 @@ export type Action =
   | { type: "intent/result"; result: IntentResult }
   | { type: "intent/failed" }
   | { type: "notice/dismiss" }
-  | { type: "resync/handled" };
+  | { type: "resync/handled" }
+  | { type: "room/received"; state: RoomState; nowMs: number }
+  | { type: "view/reset"; update: TableUpdate }
+  | { type: "room/superseded" }
+  | { type: "room/error"; kind: RoomErrorKind }
+  | { type: "room/needsName"; code: string | null }
+  | { type: "room/left" }
+  | { type: "room/rejected"; code: string }
+  | { type: "recap/set"; moves: number | null };
 
 function lose(state: AppState, reason: LostReason): AppState {
   return {
@@ -77,15 +112,9 @@ function lose(state: AppState, reason: LostReason): AppState {
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "connection/status": {
-      const next: AppState = { ...state, connection: action.status };
-      // A dropped connection can no longer own the table, so a game that was in progress is gone.
-      if (
-        (action.status === "reconnecting" || action.status === "unavailable") &&
-        (state.session === "playing" || state.session === "starting")
-      ) {
-        return { ...lose(next, "dropped") };
-      }
-      return next;
+      // The table stays on screen (marked stale) while the connection comes back; the store then
+      // rejoins the room or re-reads the view before anything is trusted again.
+      return { ...state, connection: action.status };
     }
 
     case "view/received": {
@@ -103,7 +132,8 @@ export function reducer(state: AppState, action: Action): AppState {
           : state.pending;
       return {
         ...state,
-        game: update.view,
+        game: rotateView(update.view),
+        viewer: update.view.seat,
         lastVersion: update.version,
         session: update.finished ? "finished" : "playing",
         lostReason: null,
@@ -113,6 +143,69 @@ export function reducer(state: AppState, action: Action): AppState {
         notice: state.notice?.kind === "rejection" ? null : state.notice,
       };
     }
+
+    case "view/reset": {
+      const { update } = action;
+      if (!isSupportedUpdate(update)) {
+        return { ...state, blocked: true, notice: { kind: "versionMismatch" } };
+      }
+      return {
+        ...state,
+        game: rotateView(update.view),
+        viewer: update.view.seat,
+        lastVersion: update.version,
+        session: update.finished ? "finished" : "playing",
+        lostReason: null,
+        pending: null,
+        needsResync: false,
+        superseded: false,
+      };
+    }
+
+    case "room/received": {
+      const incoming = action.state;
+      if (state.room && state.room.roomId === incoming.roomId && incoming.revision < state.room.revision) {
+        return state;
+      }
+      return {
+        ...state,
+        room: incoming,
+        clockOffsetMs: Date.parse(incoming.serverNowUtc) - action.nowMs,
+        roomError: null,
+        needsName: null,
+      };
+    }
+
+    case "room/superseded":
+      return { ...state, superseded: true };
+
+    case "room/error":
+      return { ...state, room: null, game: null, lastVersion: null, session: "idle", roomError: action.kind, needsName: null };
+
+    case "room/needsName":
+      return { ...state, needsName: { code: action.code }, roomError: null };
+
+    case "room/left":
+      return {
+        ...state,
+        room: null,
+        game: null,
+        viewer: null,
+        lastVersion: null,
+        session: "idle",
+        pending: null,
+        notice: null,
+        superseded: false,
+        roomError: null,
+        needsName: null,
+        awayRecap: null,
+      };
+
+    case "room/rejected":
+      return { ...state, notice: { kind: "roomRejection", code: action.code } };
+
+    case "recap/set":
+      return { ...state, awayRecap: action.moves };
 
     case "sync/noTable": {
       // While starting, the table may simply not exist yet; only an active game can be lost this way.

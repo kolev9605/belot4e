@@ -16,6 +16,12 @@ public interface ITableObserver
     ValueTask OnUpdateAsync(TableUpdateDto update);
 }
 
+/// <summary>Receives the raw snapshot after every accepted change; used by rooms to project per seat.</summary>
+public interface ISnapshotObserver
+{
+    ValueTask OnSnapshotAsync(TableSnapshot snapshot);
+}
+
 public sealed record TakeSeatOutcome(bool Ok, int Version, Rejection? Rejection);
 
 public sealed record ViewOutcome(TableUpdateDto? Update, Rejection? Rejection);
@@ -46,8 +52,8 @@ public sealed class LiveTable : IAsyncDisposable
 
     private readonly Task _loop;
     private readonly Task _botLoop;
-    private readonly Principal _creator;
-    private readonly ImmutableHashSet<Principal> _known;
+    private readonly Principal? _creator;
+    private readonly List<ISnapshotObserver> _snapshotObservers = new();
 
     private TableSnapshot _snapshot;
     private TaskCompletionSource _changed = NewSignal();
@@ -58,9 +64,10 @@ public sealed class LiveTable : IAsyncDisposable
 
     private LiveTable(
         TableOptions options,
-        Principal creator,
+        Principal? creator,
         Func<Seat, IPlayer>? botFactory,
-        Action<FinishedGame>? onFinished)
+        Action<FinishedGame>? onFinished,
+        IReadOnlyDictionary<Seat, Principal>? controllers = null)
     {
         Options = options;
         _onFinished = onFinished;
@@ -68,11 +75,22 @@ public sealed class LiveTable : IAsyncDisposable
         _botLabel = botFactory is null ? nameof(Belote.Bots.SmartBot) : "CustomBot";
         Id = Guid.NewGuid().ToString("N");
 
-        var bots = BotSeats.ToDictionary(s => s, s => new BotPrincipal(s));
-        _owners = bots.ToImmutableDictionary(kv => kv.Key, kv => (Principal)kv.Value);
-        _known = bots.Values.Cast<Principal>().Append(creator).ToImmutableHashSet();
-
-        _snapshot = new TableSnapshot(0, null, null, TableLifecycle.AwaitingSeat, false, ImmutableList<GameEvent>.Empty);
+        if (controllers is null)
+        {
+            _owners = BotSeats.ToImmutableDictionary(s => s, s => (Principal)new BotPrincipal(s));
+            _snapshot = new TableSnapshot(
+                0, null, null, TableLifecycle.AwaitingSeat, false, ImmutableList<GameEvent>.Empty);
+        }
+        else
+        {
+            // A room-created table: every seat has a controller and the game starts at once.
+            _owners = Seats.All.ToImmutableDictionary(
+                s => s,
+                s => controllers.TryGetValue(s, out var c) ? c : new BotPrincipal(s));
+            var start = GameEngine.Start(options.RuleSet, options.Seed);
+            _snapshot = new TableSnapshot(
+                0, start.State, null, TableLifecycle.InProgress, false, ImmutableList.CreateRange(start.Events));
+        }
 
         _loop = Task.Run(RunAsync);
         var driver = new BotDriver(this, options, botFactory ?? DefaultBot, _stop.Token);
@@ -103,6 +121,17 @@ public sealed class LiveTable : IAsyncDisposable
         Action<FinishedGame>? onFinished = null) =>
         new(options, creator, botFactory, onFinished);
 
+    /// <summary>
+    /// Creates a table that is already in progress, with the given seat controllers (seats without one are
+    /// played by bots). Used by rooms; controllers can be swapped later with <see cref="SetControllerAsync"/>.
+    /// </summary>
+    public static LiveTable CreateStarted(
+        TableOptions options,
+        IReadOnlyDictionary<Seat, Principal> controllers,
+        Func<Seat, IPlayer>? botFactory = null,
+        Action<FinishedGame>? onFinished = null) =>
+        new(options, null, botFactory, onFinished, controllers);
+
     /// <summary>The bots every table seats by default: the calculated (non-random) <see cref="Belote.Bots.SmartBot"/>.</summary>
     public static Func<Seat, IPlayer> DefaultBot { get; } = _ => new Belote.Bots.SmartBot();
 
@@ -114,6 +143,40 @@ public sealed class LiveTable : IAsyncDisposable
         }
 
         return new Subscription(this, observer);
+    }
+
+    /// <summary>Subscribes to raw snapshots (one per accepted change, in version order).</summary>
+    public IDisposable SubscribeSnapshots(ISnapshotObserver observer)
+    {
+        lock (_observerLock)
+        {
+            _snapshotObservers.Add(observer);
+        }
+
+        return new SnapshotSubscription(this, observer);
+    }
+
+    /// <summary>Who currently controls <paramref name="seat"/>.</summary>
+    public Principal ControllerOf(Seat seat) => Volatile.Read(ref _owners)[seat];
+
+    /// <summary>
+    /// Hands a seat to another controller. The swap is one actor work item, so it is atomic with respect
+    /// to every intent: an intent is applied wholly before it or judged against the new owner after it.
+    /// Game state and version are untouched.
+    /// </summary>
+    public Task SetControllerAsync(Seat seat, Principal controller)
+    {
+        var done = NewResult<bool>();
+        Enqueue(new ControllerWork(seat, controller, done));
+        return done.Task;
+    }
+
+    /// <summary>Pauses or resumes play on behalf of the room (no creator is involved).</summary>
+    public Task SetPausedAsync(bool paused)
+    {
+        var done = NewResult<bool>();
+        Enqueue(new PauseWork(null, paused, done));
+        return done.Task;
     }
 
     public Task<TakeSeatOutcome> TakeSeatAsync(Principal client)
@@ -144,7 +207,7 @@ public sealed class LiveTable : IAsyncDisposable
     public ViewOutcome GetView(Principal client)
     {
         var snap = Snapshot;
-        if (!_known.Contains(client))
+        if (!IsKnown(client))
         {
             return new ViewOutcome(null, Rejection.NotSeated("This connection is not seated at the table."));
         }
@@ -187,6 +250,24 @@ public sealed class LiveTable : IAsyncDisposable
         _stop.Dispose();
     }
 
+    /// <summary>The projected update for <paramref name="seat"/> from the latest (or given) snapshot.</summary>
+    public TableUpdateDto? BuildUpdateFor(Seat seat, TableSnapshot? snapshot = null)
+    {
+        var snap = snapshot ?? Snapshot;
+        if (snap.State is null)
+        {
+            return null;
+        }
+
+        var view = Projection.For(snap.State, seat);
+        return SeatViewMapper.ToUpdate(snap.Version, view, snap.LastCompletedTrick, snap.LastHand);
+    }
+
+    private bool IsKnown(Principal principal) =>
+        principal is BotPrincipal
+        || (_creator is not null && principal == _creator)
+        || Volatile.Read(ref _owners).Values.Contains(principal);
+
     private Task EnqueuePause(Principal client, bool paused)
     {
         var done = NewResult<bool>();
@@ -218,6 +299,12 @@ public sealed class LiveTable : IAsyncDisposable
                         break;
                     case PauseWork w:
                         PauseCore(w);
+                        w.Done.SetResult(true);
+                        break;
+                    case ControllerWork w:
+                        Volatile.Write(ref _owners, _owners.SetItem(w.Seat, w.Controller));
+                        // Wake the bot driver: a seat may just have become bot-controlled.
+                        Publish(_snapshot);
                         w.Done.SetResult(true);
                         break;
                     case FaultWork w:
@@ -268,7 +355,7 @@ public sealed class LiveTable : IAsyncDisposable
     private async ValueTask<IntentOutcome> SubmitCoreAsync(Intent intent)
     {
         var snap = _snapshot;
-        if (!_known.Contains(intent.Sender))
+        if (!IsKnown(intent.Sender))
         {
             return new IntentRejected(Rejection.NotSeated("This connection is not seated at the table."));
         }
@@ -327,7 +414,9 @@ public sealed class LiveTable : IAsyncDisposable
     private void PauseCore(PauseWork work)
     {
         var snap = _snapshot;
-        if (work.Client != _creator || snap.Lifecycle != TableLifecycle.InProgress || snap.Paused == work.Paused)
+        if ((work.Client is not null && work.Client != _creator)
+            || snap.Lifecycle != TableLifecycle.InProgress
+            || snap.Paused == work.Paused)
         {
             return;
         }
@@ -407,9 +496,10 @@ public sealed class LiveTable : IAsyncDisposable
     private FinishedGame BuildFinished(TableSnapshot snap)
     {
         var state = snap.State!;
+        var owners = _owners;
         var seats = Seats.All.ToDictionary(
             s => s,
-            s => s == ClientSeat ? "RemoteClient" : _botLabel);
+            s => owners[s] is BotPrincipal ? _botLabel : "RemoteClient");
         var log = new GameLog(state.Seed, state.RuleSet, seats, snap.Events);
         return new FinishedGame(Id, log, state.Winner!.Value, state.MatchScore[0], state.MatchScore[1]);
     }
@@ -430,14 +520,28 @@ public sealed class LiveTable : IAsyncDisposable
     private async ValueTask NotifyAsync(TableSnapshot snap)
     {
         ITableObserver[] targets;
+        ISnapshotObserver[] snapshotTargets;
         lock (_observerLock)
         {
-            if (_observers.Count == 0)
-            {
-                return;
-            }
-
             targets = _observers.ToArray();
+            snapshotTargets = _snapshotObservers.ToArray();
+        }
+
+        foreach (var observer in snapshotTargets)
+        {
+            try
+            {
+                await observer.OnSnapshotAsync(snap).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // A faulty observer must never stop the table.
+            }
+        }
+
+        if (targets.Length == 0)
+        {
+            return;
         }
 
         var update = BuildUpdate(snap);
@@ -473,7 +577,12 @@ public sealed class LiveTable : IAsyncDisposable
         public override void Fail(Exception exception) => Done.TrySetException(exception);
     }
 
-    private sealed record PauseWork(Principal Client, bool Paused, TaskCompletionSource<bool> Done) : Work
+    private sealed record PauseWork(Principal? Client, bool Paused, TaskCompletionSource<bool> Done) : Work
+    {
+        public override void Fail(Exception exception) => Done.TrySetException(exception);
+    }
+
+    private sealed record ControllerWork(Seat Seat, Principal Controller, TaskCompletionSource<bool> Done) : Work
     {
         public override void Fail(Exception exception) => Done.TrySetException(exception);
     }
@@ -481,6 +590,26 @@ public sealed class LiveTable : IAsyncDisposable
     private sealed record FaultWork(string Detail, TaskCompletionSource<bool> Done) : Work
     {
         public override void Fail(Exception exception) => Done.TrySetException(exception);
+    }
+
+    private sealed class SnapshotSubscription : IDisposable
+    {
+        private readonly LiveTable _table;
+        private readonly ISnapshotObserver _observer;
+
+        public SnapshotSubscription(LiveTable table, ISnapshotObserver observer)
+        {
+            _table = table;
+            _observer = observer;
+        }
+
+        public void Dispose()
+        {
+            lock (_table._observerLock)
+            {
+                _table._snapshotObservers.Remove(_observer);
+            }
+        }
     }
 
     private sealed class Subscription : IDisposable

@@ -17,12 +17,19 @@ internal sealed class LiveServer : IAsyncDisposable
 
     public string HubUrl { get; }
 
-    public TableRegistry Registry => _app.Services.GetRequiredService<TableRegistry>();
+    /// <summary>The server's base address, e.g. <c>http://127.0.0.1:5123</c>.</summary>
+    public string BaseUrl => HubUrl[..^TableHub.Path.Length];
 
-    public static async Task<LiveServer> StartAsync(Action<TableServerOptions>? configure = null)
+    public RoomRegistry Registry => _app.Services.GetRequiredService<RoomRegistry>();
+
+    public static async Task<LiveServer> StartAsync(
+        Action<TableServerOptions>? configure = null,
+        params string[] extraArgs)
     {
         var app = ServerHost.Build(
-            new[] { "--urls", "http://127.0.0.1:0", "--Logging:LogLevel:Default=Warning" },
+            new[] { "--urls", "http://127.0.0.1:0", "--Logging:LogLevel:Default=Warning" }
+                .Concat(extraArgs)
+                .ToArray(),
             configure);
         await app.StartAsync();
         var address = app.Urls.First();

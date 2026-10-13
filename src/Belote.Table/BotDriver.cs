@@ -7,16 +7,16 @@ using Belote.Core;
 namespace Belote.Table;
 
 /// <summary>
-/// Plays the bot seats. Each move is chosen from the seat's own <see cref="SeatView"/> and enters the
+/// Plays every seat that is currently bot-controlled (which can change at any time: a bot may take over
+/// from a human or hand the seat back). Each move is chosen from the seat's own <see cref="SeatView"/> and enters the
 /// table through <see cref="LiveTable.SubmitAsync(Intent)"/>, exactly like a human seat's intent.
 /// </summary>
 internal sealed class BotDriver
 {
-    private static readonly Seat[] Seats = { Seat.North, Seat.East, Seat.West };
-
     private readonly LiveTable _table;
     private readonly TableOptions _options;
     private readonly Dictionary<Seat, IPlayer> _bots = new();
+    private readonly Func<Seat, IPlayer> _botFactory;
     private readonly CancellationToken _stop;
 
     public BotDriver(LiveTable table, TableOptions options, Func<Seat, IPlayer> botFactory, CancellationToken stop)
@@ -24,10 +24,18 @@ internal sealed class BotDriver
         _table = table;
         _options = options;
         _stop = stop;
-        foreach (var seat in Seats)
+        _botFactory = botFactory;
+    }
+
+    private IPlayer BotFor(Seat seat)
+    {
+        if (!_bots.TryGetValue(seat, out var bot))
         {
-            _bots[seat] = botFactory(seat);
+            bot = _botFactory(seat);
+            _bots[seat] = bot;
         }
+
+        return bot;
     }
 
     public async Task RunAsync()
@@ -47,9 +55,10 @@ internal sealed class BotDriver
 
                 if (snap.Lifecycle == TableLifecycle.InProgress
                     && !snap.Paused
-                    && _bots.TryGetValue(snap.State!.ToAct, out var bot))
+                    && _table.ControllerOf(snap.State!.ToAct) is BotPrincipal)
                 {
                     var seat = snap.State.ToAct;
+                    var bot = BotFor(seat);
                     if (_options.BotDelay > TimeSpan.Zero)
                     {
                         await Task.Delay(_options.BotDelay, _options.TimeProvider, _stop).ConfigureAwait(false);
@@ -73,6 +82,14 @@ internal sealed class BotDriver
                         .ConfigureAwait(false);
                     if (outcome is IntentRejected { Rejection.Category: RejectionCategory.Paused })
                     {
+                        continue;
+                    }
+
+                    // The seat was handed to a human between the decision and the submit: the decision is
+                    // stale, not a fault. Forget it and look at the table again.
+                    if (outcome is IntentRejected { Rejection.Category: RejectionCategory.NotOwner })
+                    {
+                        pending = null;
                         continue;
                     }
 

@@ -1,7 +1,7 @@
 // Wire types mirroring specs/003-playable-table-ui/contracts/hub-client.md
-// and specs/002-live-table-vs-bots/contracts/hub-protocol.md. Protocol version 1.
+// and specs/002-live-table-vs-bots/contracts/hub-protocol.md. Protocol version 2.
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const CLIENT_SEAT = "south";
 
 export type Seat = "north" | "east" | "south" | "west";
@@ -168,6 +168,81 @@ export interface IntentResult {
 export interface GetViewResult {
   update?: TableUpdate | null;
   rejection?: Rejection | null;
+}
+
+// ---- Rooms (protocol v2) -------------------------------------------------------------------
+
+export type RoomLifecycle = "lobby" | "ingame" | "finished" | "ended";
+export type SeatConnection = "connected" | "reconnecting" | "away" | "offline";
+
+export interface RoomSeat {
+  seat: Seat;
+  kind: "free" | "human" | "bot";
+  participantId: string | null;
+  name: string | null;
+  connection: SeatConnection | null;
+  deadlineUtc: string | null;
+  /** For a bot that replaced a human: that human's name. */
+  botFor: string | null;
+  origin: "default" | "left" | "replaced" | null;
+}
+
+export interface MissingPlayer {
+  participantId: string;
+  seat: Seat;
+  name: string;
+  deadlineUtc: string;
+}
+
+export interface PendingTakeover {
+  seat: Seat;
+  name: string;
+}
+
+export type RoomEventKind =
+  | "joined"
+  | "left"
+  | "seated"
+  | "stoodUp"
+  | "replaced"
+  | "skipped"
+  | "reclaimed"
+  | "hostChanged"
+  | "nameChanged"
+  | "joiningNextHand"
+  | "gameStarted"
+  | "gameFinished";
+
+export interface RoomEvent {
+  kind: RoomEventKind;
+  seat: Seat | null;
+  name: string | null;
+  byName: string | null;
+  revision: number;
+}
+
+export interface RoomState {
+  protocolVersion: number;
+  roomId: string;
+  revision: number;
+  serverNowUtc: string;
+  lifecycle: RoomLifecycle;
+  hostId: string;
+  you: { participantId: string; seat: Seat | null; isHost: boolean };
+  seats: RoomSeat[];
+  missing: MissingPlayer[];
+  pendingTakeovers: PendingTakeover[];
+  lastEvent: RoomEvent | null;
+}
+
+export interface RoomResult {
+  ok: boolean;
+  roomId?: string | null;
+  state?: RoomState | null;
+  rejection?: Rejection | null;
+  update?: TableUpdate | null;
+  awayMoves?: number | null;
+  pendingNextHand?: boolean | null;
 }
 
 export function isSupportedUpdate(update: { protocolVersion?: number } | null | undefined): boolean {

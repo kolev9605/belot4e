@@ -24,17 +24,16 @@ beforeEach(() => {
 });
 
 describe("table rendering (US1)", () => {
-  it("shows the start control when idle and connected", async () => {
+  it("shows the main menu when idle and connected", async () => {
     await mount();
     expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Join game" })).toBeEnabled();
     expect(screen.getByTestId("connection-banner")).toHaveAttribute("data-status", "connected");
   });
 
-  it("starts a game: creates the table, takes South, then shows the dealt hand", async () => {
+  it("a received game view shows the table straight away", async () => {
     const client = await mount();
-    client.viewResult = { update: makeUpdate(0) };
-    await userEvent.click(screen.getByRole("button", { name: "Start game" }));
-    expect(client.calls).toEqual(expect.arrayContaining(["createTable", "takeSeat", "getView"]));
+    await push(client, makeUpdate(0));
     expect(await screen.findByRole("button", { name: "Queen of Hearts, playable" })).toBeEnabled();
   });
 

@@ -103,7 +103,7 @@ public class ConcurrencyDisconnectAndWire
                 // Only the creation request may mention a seed (it is input, never output).
                 if (property.Name.Contains("seed", StringComparison.OrdinalIgnoreCase))
                 {
-                    Assert.Equal(typeof(CreateTableRequest), type);
+                    Assert.Contains(type, new[] { typeof(CreateTableRequest), typeof(CreateRoomRequest) });
                 }
             }
         }
