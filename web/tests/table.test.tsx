@@ -64,31 +64,7 @@ describe("table rendering (US1)", () => {
     expect(screen.queryAllByRole("img").length).toBe(2);
   });
 
-  it("keeps the completed trick and its winner visible", async () => {
-    const client = await mount();
-    await push(
-      client,
-      makeUpdate(0, {
-        legalActions: [],
-        toAct: "east",
-        currentTrick: [],
-        lastCompletedTrick: {
-          dealNumber: 1,
-          trickNumber: 2,
-          leader: "east",
-          plays: [
-            { seat: "east", card: "KD" },
-            { seat: "south", card: "7D" },
-            { seat: "west", card: "AD" },
-            { seat: "north", card: "9D" },
-          ],
-          winner: "west",
-        },
-      }),
-    );
-    expect(screen.getAllByRole("img").length).toBe(4);
-    expect(screen.getByText("Trick won by West")).toBeInTheDocument();
-  });
+  // A completed trick is held, then swept to its winner: see tests/presenter.test.tsx.
 
   it("offers legal bids during bidding and echoes the chosen action", async () => {
     const client = await mount();

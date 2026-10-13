@@ -14,6 +14,8 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Unit tests assert on immediately-settled state; pacing tests pass an explicit config.
+    env: { VITE_PACING: "instant" },
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.{ts,tsx}"],

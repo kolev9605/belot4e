@@ -51,7 +51,7 @@ public class SeatViewMapperTests
 
         var expected = LegalActions.For(view).Select(a => LegalActionMapper.ToDto(seat, a)).ToArray();
         Assert.Equal(expected, dto.LegalActions);
-        Assert.Equal(view.OwnHand.Select(c => c.ToString()), dto.OwnHand);
+        Assert.Equal(view.OwnHand.Select(c => c.ToString()).OrderBy(c => c), dto.OwnHand.OrderBy(c => c));
         Assert.Equal(JsonNames.Of(seat), dto.Seat);
         Assert.Equal("bidding", dto.Phase);
     }

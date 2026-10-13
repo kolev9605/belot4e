@@ -20,3 +20,16 @@ no game rules.
 - `src/protocol` wire types; `src/connection` SignalR client with retry and status
 - `src/state` reducer and selectors; `src/i18n` English and Bulgarian strings
 - `src/components` the table UI
+- `src/presentation` presenter: turns the server's views into timed steps (deal, play, hold, collect) so cards
+  are shown at a readable pace; input is enabled only once the table has settled on the latest view
+- `src/theme` design tokens (`tokens.css`, one dark palette and accent), pacing values (`motion.ts`) and geometry
+
+## Pacing and theme
+
+- Card pacing defaults live in `src/theme/motion.ts` (`DEFAULT_PACING`). `?pace=instant` in the page address
+  (or `VITE_PACING=instant` at build/test time) turns every pause off; unit tests and most e2e specs use it.
+- Colours come only from the tokens in `src/theme/tokens.css`; `tests/theme-contrast.test.ts` checks every
+  text/UI pair against WCAG AA and fails if light-theme utility classes creep back in.
+- The hand is grouped by suit in the fixed order spades, hearts, clubs, diamonds. Order inside a suit is the
+  server's (strongest first for the contract in force); the client never computes card power.
+

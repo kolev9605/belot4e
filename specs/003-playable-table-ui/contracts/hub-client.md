@@ -57,3 +57,10 @@ Clients treat it as `session = lost`.
 New wire content is `handSizes` (counts) and `TableClosed` (no game data). A test asserts every
 update/view contains no card outside `ownHand`, `currentTrick`, `lastCompletedTrick`,
 `completedTricks`, `legalActions` and `ownDeclared`.
+
+## Addendum (feature 005): order of `ownHand`
+
+`ownHand` lists the person's cards strongest-first within each suit for the contract in force
+(no-trump order while none is decided). The order across suits is unspecified; clients group by
+suit themselves. See `specs/005-modern-game-ui/contracts/hand-order.md`.
+
