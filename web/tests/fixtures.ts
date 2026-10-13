@@ -1,11 +1,14 @@
 import type { HubClient, HubHandlers } from "../src/connection/hubClient";
 import type {
   ConnectionStatus,
+  Seat,
   CreateTableResult,
   GetViewResult,
   HandSummary,
   IntentDto,
   IntentResult,
+  RoomResult,
+  RoomState,
   TableUpdate,
   TableView,
   TakeSeatResult,
@@ -47,7 +50,36 @@ export function makeView(overrides: Partial<TableView> = {}): TableView {
 }
 
 export function makeUpdate(version: number, view: Partial<TableView> = {}, finished = false): TableUpdate {
-  return { protocolVersion: 1, version, finished, view: makeView(view) };
+  return { protocolVersion: 2, version, finished, view: makeView(view) };
+}
+
+export const ROOM_ID = "3f2b8c1e-9a4d-4e7b-8c55-0d1f2a3b4c5d";
+
+type SeatSpec = Partial<RoomState["seats"][number]> & { seat: Seat };
+
+/** A room as pushed by the server: Ivo (host) at south and Mira at north, bots elsewhere unless overridden. */
+export function makeRoomState(overrides: Partial<RoomState> = {}, seats: SeatSpec[] = []): RoomState {
+  const base: RoomState["seats"] = [
+    { seat: "north", kind: "human", participantId: "p-2", name: "Mira", connection: "connected", deadlineUtc: null, botFor: null, origin: null },
+    { seat: "east", kind: "bot", participantId: null, name: "Bot", connection: null, deadlineUtc: null, botFor: null, origin: "default" },
+    { seat: "south", kind: "human", participantId: "p-1", name: "Ivo", connection: "connected", deadlineUtc: null, botFor: null, origin: null },
+    { seat: "west", kind: "bot", participantId: null, name: "Bot", connection: null, deadlineUtc: null, botFor: null, origin: "default" },
+  ];
+  const merged = base.map((b) => ({ ...b, ...(seats.find((s) => s.seat === b.seat) ?? {}) }));
+  return {
+    protocolVersion: 2,
+    roomId: ROOM_ID,
+    revision: 1,
+    serverNowUtc: new Date().toISOString(),
+    lifecycle: "lobby",
+    hostId: "p-1",
+    you: { participantId: "p-1", seat: "south", isHost: true },
+    seats: merged,
+    missing: [],
+    pendingTakeovers: [],
+    lastEvent: null,
+    ...overrides,
+  };
 }
 
 /** A hub client driven by the test: it records calls and lets the test push events. */
@@ -85,6 +117,54 @@ export class FakeHubClient implements HubClient {
     return this.viewResult;
   }
 
+  // ---- rooms -------------------------------------------------------------------------------
+  roomResult: RoomResult = { ok: false, rejection: { category: "room", code: "RoomNotFound" } };
+  rejoinResult: RoomResult | null = null;
+  joined: { roomId: string; token: string; name: string }[] = [];
+  created: { token: string; name: string }[] = [];
+  roomCalls: string[] = [];
+
+  private record(name: string, result?: RoomResult): Promise<RoomResult> {
+    this.calls.push(name);
+    this.roomCalls.push(name);
+    return Promise.resolve(result ?? this.roomResult);
+  }
+  async createRoom(request: { token: string; name: string }): Promise<RoomResult> {
+    this.created.push({ token: request.token, name: request.name });
+    return this.record("createRoom");
+  }
+  async joinRoom(request: { roomId: string; token: string; name: string }): Promise<RoomResult> {
+    this.joined.push(request);
+    return this.record("joinRoom");
+  }
+  async rejoin(): Promise<RoomResult> {
+    return this.record("rejoin", this.rejoinResult ?? undefined);
+  }
+  async setName(): Promise<RoomResult> {
+    return this.record("setName");
+  }
+  async claimSeat(): Promise<RoomResult> {
+    return this.record("claimSeat");
+  }
+  async releaseSeat(): Promise<RoomResult> {
+    return this.record("releaseSeat");
+  }
+  async startRoomGame(): Promise<RoomResult> {
+    return this.record("startRoomGame");
+  }
+  async skipWait(): Promise<RoomResult> {
+    return this.record("skipWait");
+  }
+  async leaveRoom(): Promise<RoomResult> {
+    return this.record("leaveRoom", { ok: true });
+  }
+  async playAgain(): Promise<RoomResult> {
+    return this.record("playAgain");
+  }
+  async takeBack(): Promise<RoomResult> {
+    return this.record("takeBack");
+  }
+
   status(status: ConnectionStatus) {
     this.handlers?.status(status);
   }
@@ -92,7 +172,13 @@ export class FakeHubClient implements HubClient {
     this.handlers?.update(update);
   }
   close() {
-    this.handlers?.tableClosed({ protocolVersion: 1, reason: "replaced" });
+    this.handlers?.tableClosed({ protocolVersion: 2, reason: "replaced" });
+  }
+  pushRoom(state: RoomState) {
+    this.handlers?.room(state);
+  }
+  supersede() {
+    this.handlers?.superseded();
   }
 }
 

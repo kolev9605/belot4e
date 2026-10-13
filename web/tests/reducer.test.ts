@@ -70,10 +70,11 @@ describe("losing a game", () => {
     expect(reducer(done, { type: "sync/noTable" }).session).toBe("finished");
   });
 
-  it("a dropped connection during play loses the game", () => {
+  it("a dropped connection keeps the game on screen until the server says otherwise", () => {
     const state = reducer(playing, { type: "connection/status", status: "reconnecting" });
-    expect(state.session).toBe("lost");
-    expect(state.lostReason).toBe("dropped");
+    expect(state.session).toBe("playing");
+    expect(state.game).toBe(playing.game);
+    expect(state.connection).toBe("reconnecting");
   });
 
   it("late pushes are ignored once lost, and a new start resets the version", () => {

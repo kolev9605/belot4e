@@ -114,8 +114,7 @@ describe("connection handling (US3)", () => {
       return original();
     };
     await mount("en", client); // connect triggers the slow initial read
-    client.viewResult = { update: makeUpdate(0) };
-    await userEvent.click(screen.getByRole("button", { name: "Start game" }));
+    await push(client, makeUpdate(0)); // the game starts (pushed) before the stale answer arrives
     await act(async () => answerLate());
     expect(await screen.findByRole("button", { name: "Queen of Hearts, playable" })).toBeInTheDocument();
     expect(screen.queryByTestId("game-lost")).toBeNull();
@@ -128,15 +127,18 @@ describe("connection handling (US3)", () => {
     expect(await screen.findByRole("button", { name: "Queen of Hearts, playable" })).toBeInTheDocument();
   });
 
-  it("shows the banner and a lost game when the connection drops, and allows a new game after reconnecting", async () => {
+  it("keeps the table on screen, stale and inert, while the connection drops and comes back", async () => {
     const client = await mount();
     await push(client, makeUpdate(0));
     await act(async () => client.status("reconnecting"));
     expect(screen.getByTestId("connection-banner")).toHaveAttribute("data-status", "reconnecting");
-    expect(screen.getByTestId("game-lost")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+    // The game is not thrown away; input is simply off until the server confirms it is still there.
+    expect(screen.queryByTestId("game-lost")).toBeNull();
+    expect(screen.getByRole("button", { name: "Queen of Hearts, playable" })).toBeDisabled();
 
+    // Back online with no table on the server (legacy single table): the game is lost, and a new one can start.
     await act(async () => client.status("connected"));
+    expect(await screen.findByTestId("game-lost")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /playable/ })).toBeNull();
   });
@@ -161,17 +163,20 @@ describe("connection handling (US3)", () => {
   it("cannot send moves while disconnected", async () => {
     const client = await mount();
     await push(client, makeUpdate(0));
-    // Simulate the stale moment before the reducer marks the game lost: input must still be off.
+    // The table stays visible while the connection is down, but nothing can be sent.
     await act(async () => client.status("unavailable"));
-    expect(screen.queryByRole("button", { name: "Queen of Hearts, playable" })).toBeNull();
+    const card = screen.getByRole("button", { name: "Queen of Hearts, playable" });
+    expect(card).toBeDisabled();
+    await userEvent.click(card);
     expect(client.submitted).toHaveLength(0);
   });
 
-  it("returns to a startable state when starting is refused", async () => {
+  it("returns to the menu with an explanation when creating a room is refused", async () => {
     const client = await mount();
-    client.createResult = { ok: false, rejection: { category: "tableExists", code: "TableExists" } };
+    window.localStorage.setItem("belote.profile.v1", JSON.stringify({ name: "Ivo" }));
+    client.roomResult = { ok: false, rejection: { category: "state", code: "GameInProgress" } };
     await userEvent.click(screen.getByRole("button", { name: "Start game" }));
-    expect(await screen.findByTestId("notice")).toHaveTextContent("A game is already in progress.");
+    expect(await screen.findByTestId("notice")).toHaveTextContent("The game is already in progress.");
     expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
   });
 });

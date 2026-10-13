@@ -1,3 +1,7 @@
+> **Superseded in part**: rooms and protocol version 2 (feature 007) extend this contract; see
+> `specs/007-rooms-multiplayer/contracts/hub-protocol.md`. `CreateTable`/`TakeSeat` below remain as a
+> single-player shim over rooms, and a different connection's `CreateTable` no longer replaces a table.
+
 # Contract: Table hub protocol (v1)
 
 SignalR hub at `/table`, JSON protocol, WebSocket transport. All names are camelCase; seats,

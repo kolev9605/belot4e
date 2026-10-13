@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Belote.Table.Rooms;
 
 namespace Belote.Server;
 
@@ -31,14 +32,19 @@ public static class ServerHost
 
         var options = new TableServerOptions();
         builder.Configuration.GetSection(TableServerOptions.SectionName).Bind(options);
+        builder.Configuration.GetSection(RoomOptions.SectionName).Bind(options.Rooms);
         configure?.Invoke(options);
 
         builder.Services.AddSingleton(options);
-        builder.Services.AddSingleton<TableRegistry>();
+        builder.Services.AddSingleton<RoomRegistry>();
         builder.Services.AddSignalR(hub =>
         {
             // Let bursts of intents reach the table, which serialises them.
             hub.MaximumParallelInvocationsPerClient = 16;
+
+            // Notice a lost connection quickly: a silent network loss pauses the table within ~15 s.
+            hub.KeepAliveInterval = TimeSpan.FromSeconds(5);
+            hub.ClientTimeoutInterval = TimeSpan.FromSeconds(15);
         });
 
         var app = builder.Build();

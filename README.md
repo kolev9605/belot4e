@@ -121,3 +121,13 @@ cd web && npm install && npm run dev
 Open the Vite URL it prints; `/table` is proxied to the server. For a single origin, run
 `npm run build` in `web/` and start the server with `--Web:RootPath=<absolute path to web/dist>`.
 See `web/README.md` for tests and `specs/003-playable-table-ui/quickstart.md` for validation steps.
+
+### Rooms and multiplayer (spec 007)
+
+"Start game" creates a room and gives a link of the form `<site>/room/<guid>`; friends open it (or paste the
+guid or link into "Join game"), pick a name and a free seat, and the host starts. Reloading or losing the
+connection returns a player to the same seat; the table pauses for up to one minute (`Room:GraceSeconds`),
+after which a bot takes the seat and the player can still take it back. Rooms are kept in server memory only
+(no database): restarting the server ends every room, and a room with nobody connected is closed after
+`Room:IdleExpiryMinutes` (default 60). Identity is a random token in the browser, so a seat can only be
+reclaimed from the same browser. See `specs/007-rooms-multiplayer/` for the design.

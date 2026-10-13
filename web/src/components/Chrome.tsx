@@ -62,6 +62,7 @@ export function NoticeBar({ notice, onDismiss }: { notice: NoticeState | null; o
   let message: string;
   switch (notice.kind) {
     case "rejection":
+    case "roomRejection":
       message = rejectionMessage(language, notice.code);
       break;
     case "versionMismatch":
@@ -111,7 +112,18 @@ export function StartPanel({ starting, canStart, lost, onStart }: StartPanelProp
   );
 }
 
-export function ResultPanel({ game, onPlayAgain, canStart }: { game: TableView; onPlayAgain: () => void; canStart: boolean }) {
+export function ResultPanel({
+  game,
+  onPlayAgain,
+  canStart,
+  hostOnly = false,
+}: {
+  game: TableView;
+  onPlayAgain: () => void;
+  canStart: boolean;
+  /** In a room only the host can start the next game; everyone else just waits. */
+  hostOnly?: boolean;
+}) {
   const { language, t } = useLanguage();
   const winner = game.winner;
   return (
@@ -130,9 +142,11 @@ export function ResultPanel({ game, onPlayAgain, canStart }: { game: TableView; 
       <p className="mt-1">
         {t("result.finalScore", { northSouth: game.matchScore.northSouth, eastWest: game.matchScore.eastWest })}
       </p>
-      <button type="button" className={`${primaryButtonClass} mt-3`} disabled={!canStart} onClick={onPlayAgain}>
-        {t("game.playAgain")}
-      </button>
+      {!hostOnly && (
+        <button type="button" className={`${primaryButtonClass} mt-3`} disabled={!canStart} onClick={onPlayAgain}>
+          {t("game.playAgain")}
+        </button>
+      )}
     </section>
   );
 }

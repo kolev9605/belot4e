@@ -67,7 +67,13 @@ describe("restart on the same client (React StrictMode runs effects twice in dev
       return c;
     });
     const statuses: ConnectionStatus[] = [];
-    const handlers = { status: (s: ConnectionStatus) => statuses.push(s), update: () => {}, tableClosed: () => {} };
+    const handlers = {
+      status: (s: ConnectionStatus) => statuses.push(s),
+      update: () => {},
+      tableClosed: () => {},
+      room: () => {},
+      superseded: () => {},
+    };
 
     client.start(handlers);
     void client.stop();
@@ -93,6 +99,8 @@ function setup(failStarts = 0) {
     status: (s) => statuses.push(s),
     update: (u) => updates.push(u),
     tableClosed: (m) => closed.push(m),
+    room: () => {},
+    superseded: () => {},
   });
   return { connection, client, statuses, updates, closed };
 }

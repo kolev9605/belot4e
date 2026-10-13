@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Belote.Table;
@@ -99,7 +100,7 @@ public sealed record SeatViewDto(
 
 public sealed record TableUpdateDto(int ProtocolVersion, int Version, bool Finished, SeatViewDto View)
 {
-    public const int CurrentProtocolVersion = 1;
+    public const int CurrentProtocolVersion = 2;
 }
 
 public sealed record RejectionDto(string Category, string Code, string Detail);
@@ -115,3 +116,63 @@ public sealed record TakeSeatRequest(string? Seat);
 public sealed record TakeSeatResultDto(bool Ok, int? Version, RejectionDto? Rejection);
 
 public sealed record GetViewResultDto(TableUpdateDto? Update, RejectionDto? Rejection);
+
+// ---- Rooms (protocol v2) ------------------------------------------------------------------------
+
+/// <summary>One seat of a room as everyone in the room sees it. Never carries hands or tokens.</summary>
+public sealed record RoomSeatDto(
+    string Seat,
+    string Kind,
+    string? ParticipantId,
+    string? Name,
+    string? Connection,
+    DateTimeOffset? DeadlineUtc,
+    string? BotFor,
+    string? Origin);
+
+public sealed record MissingDto(string ParticipantId, string Seat, string Name, DateTimeOffset DeadlineUtc);
+
+public sealed record PendingTakeoverDto(string Seat, string Name);
+
+public sealed record RoomEventDto(string Kind, string? Seat, string? Name, string? ByName, int Revision);
+
+public sealed record RoomYouDto(string ParticipantId, string? Seat, bool IsHost);
+
+/// <summary>Pushed to every connected participant on each room change (<c>Room</c> message).</summary>
+public sealed record RoomStateDto(
+    int ProtocolVersion,
+    string RoomId,
+    int Revision,
+    DateTimeOffset ServerNowUtc,
+    string Lifecycle,
+    string HostId,
+    RoomYouDto You,
+    IReadOnlyList<RoomSeatDto> Seats,
+    IReadOnlyList<MissingDto> Missing,
+    IReadOnlyList<PendingTakeoverDto> PendingTakeovers,
+    RoomEventDto? LastEvent);
+
+/// <summary>Pushed to a connection whose participant was taken over by a newer connection.</summary>
+public sealed record SupersededDto(int ProtocolVersion);
+
+public sealed record CreateRoomRequest(string? Token, string? Name, ulong? Seed = null, int? BotDelayMs = null);
+
+public sealed record JoinRoomRequest(string? RoomId, string? Token, string? Name);
+
+public sealed record RejoinRequest(string? RoomId, string? Token);
+
+public sealed record SetNameRequest(string? Name);
+
+public sealed record ClaimSeatRequest(string? Seat);
+
+public sealed record SkipWaitRequest(string? ParticipantId = null);
+
+/// <summary>The one result shape of every room method; unused members are null.</summary>
+public sealed record RoomResultDto(
+    bool Ok,
+    string? RoomId,
+    RoomStateDto? State,
+    RejectionDto? Rejection,
+    TableUpdateDto? Update = null,
+    int? AwayMoves = null,
+    bool? PendingNextHand = null);

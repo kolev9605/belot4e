@@ -59,7 +59,14 @@ export function Table() {
   const announcement = liveMessage(latest, language, t);
 
   let body;
-  if (!game || !latest || state.session === "idle" || state.session === "starting" || state.session === "lost") {
+  if (state.room && (!game || !latest)) {
+    // In a room the game starts from the lobby; until the first view arrives the cards are being dealt.
+    body = (
+      <section className="panel mt-4 p-4" data-testid="room-dealing">
+        <p>{t("room.dealing")}</p>
+      </section>
+    );
+  } else if (!game || !latest || state.session === "idle" || state.session === "starting" || state.session === "lost") {
     body = (
       <StartPanel
         starting={state.session === "starting"}
@@ -127,14 +134,19 @@ export function Table() {
           playing={choosingCard}
         />
         {state.session === "finished" && presented.settled && (
-          <ResultPanel game={latest} canStart={connected} onPlayAgain={startGame} />
+          <ResultPanel
+            game={latest}
+            canStart={connected}
+            onPlayAgain={startGame}
+            hostOnly={state.room !== null && !state.room.you.isHost}
+          />
         )}
         {frame?.result && (
           <HandResultDialog
             key={frame.result.dealNumber}
             summary={frame.result}
             onDismiss={presented.release}
-            onPlayAgain={frame.result.winner ? startGame : undefined}
+            onPlayAgain={frame.result.winner && !(state.room && !state.room.you.isHost) ? startGame : undefined}
             canStart={connected}
           />
         )}

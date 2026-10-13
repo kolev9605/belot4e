@@ -1,12 +1,25 @@
 import { rankName, translate, type Language } from "../i18n";
 import type { AnnouncementSpec, BidEntry, ContractKind, IntentDto, PublicAnnouncement, Seat, Team } from "../protocol/types";
 
+/**
+ * Display names for seats and teams in the current room (keyed by the viewer-relative seat the UI
+ * uses). Set by the store while it renders; when empty the compass names are used, which keeps the
+ * single-player table unchanged.
+ */
+let seatLabels: Partial<Record<Seat, string>> = {};
+let teamLabels: Partial<Record<Team, string>> = {};
+
+export function setLabels(seats: Partial<Record<Seat, string>>, teams: Partial<Record<Team, string>>): void {
+  seatLabels = seats;
+  teamLabels = teams;
+}
+
 export function seatName(language: Language, seat: Seat): string {
-  return translate(language, `seat.${seat}` as never);
+  return seatLabels[seat] ?? translate(language, `seat.${seat}` as never);
 }
 
 export function teamName(language: Language, team: Team): string {
-  return translate(language, `team.${team}` as never);
+  return teamLabels[team] ?? translate(language, `team.${team}` as never);
 }
 
 export function contractName(language: Language, contract: ContractKind | string): string {

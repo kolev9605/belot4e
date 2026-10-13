@@ -5,6 +5,8 @@ import type {
   GetViewResult,
   IntentDto,
   IntentResult,
+  RoomResult,
+  RoomState,
   TableClosed,
   TableUpdate,
   TakeSeatResult,
@@ -23,6 +25,8 @@ export interface HubHandlers {
   status: (status: ConnectionStatus) => void;
   update: (update: TableUpdate) => void;
   tableClosed: (message: TableClosed) => void;
+  room: (state: RoomState) => void;
+  superseded: () => void;
 }
 
 /** What the page needs from the game server; the SignalR implementation is below. */
@@ -33,6 +37,19 @@ export interface HubClient {
   takeSeat(): Promise<TakeSeatResult>;
   submitIntent(intent: IntentDto): Promise<IntentResult>;
   getView(): Promise<GetViewResult>;
+
+  // Rooms (protocol v2). Identity is the token, never the connection.
+  createRoom(request: { token: string; name: string; seed?: number; botDelayMs?: number }): Promise<RoomResult>;
+  joinRoom(request: { roomId: string; token: string; name: string }): Promise<RoomResult>;
+  rejoin(request: { roomId: string; token: string }): Promise<RoomResult>;
+  setName(name: string): Promise<RoomResult>;
+  claimSeat(seat: string): Promise<RoomResult>;
+  releaseSeat(): Promise<RoomResult>;
+  startRoomGame(): Promise<RoomResult>;
+  skipWait(participantId?: string): Promise<RoomResult>;
+  leaveRoom(): Promise<RoomResult>;
+  playAgain(): Promise<RoomResult>;
+  takeBack(): Promise<RoomResult>;
 }
 
 /** The subset of a SignalR HubConnection that the client relies on (also implemented by test fakes). */
@@ -50,6 +67,8 @@ export interface HubConnectionLike {
 export function createSignalRConnection(url = "/table"): HubConnectionLike {
   return new HubConnectionBuilder()
     .withUrl(url, { transport: HttpTransportType.WebSockets, skipNegotiation: false })
+    // Match the server's 5 s keep-alive so a silent loss is noticed quickly on both sides.
+    .withKeepAliveInterval(5000)
     .withAutomaticReconnect({
       // Never give up: the page keeps trying for as long as it is open.
       nextRetryDelayInMilliseconds: (context) => retryDelay(context.previousRetryCount),
@@ -87,6 +106,12 @@ export class SignalRHubClient implements HubClient {
     connection.on("TableClosed", (message: TableClosed) => {
       if (!session.stopped) handlers.tableClosed(message);
     });
+    connection.on("Room", (state: RoomState) => {
+      if (!session.stopped) handlers.room(state);
+    });
+    connection.on("Superseded", () => {
+      if (!session.stopped) handlers.superseded();
+    });
     connection.onreconnecting(() => this.setStatus(session, "reconnecting"));
     connection.onreconnected(() => this.setStatus(session, "connected"));
     connection.onclose(() => {
@@ -119,6 +144,50 @@ export class SignalRHubClient implements HubClient {
 
   getView(): Promise<GetViewResult> {
     return this.invoke<GetViewResult>("GetView");
+  }
+
+  createRoom(request: { token: string; name: string; seed?: number; botDelayMs?: number }): Promise<RoomResult> {
+    return this.invoke<RoomResult>("CreateRoom", request);
+  }
+
+  joinRoom(request: { roomId: string; token: string; name: string }): Promise<RoomResult> {
+    return this.invoke<RoomResult>("JoinRoom", request);
+  }
+
+  rejoin(request: { roomId: string; token: string }): Promise<RoomResult> {
+    return this.invoke<RoomResult>("Rejoin", request);
+  }
+
+  setName(name: string): Promise<RoomResult> {
+    return this.invoke<RoomResult>("SetName", { name });
+  }
+
+  claimSeat(seat: string): Promise<RoomResult> {
+    return this.invoke<RoomResult>("ClaimSeat", { seat });
+  }
+
+  releaseSeat(): Promise<RoomResult> {
+    return this.invoke<RoomResult>("ReleaseSeat");
+  }
+
+  startRoomGame(): Promise<RoomResult> {
+    return this.invoke<RoomResult>("StartGame");
+  }
+
+  skipWait(participantId?: string): Promise<RoomResult> {
+    return this.invoke<RoomResult>("SkipWait", { participantId: participantId ?? null });
+  }
+
+  leaveRoom(): Promise<RoomResult> {
+    return this.invoke<RoomResult>("LeaveRoom");
+  }
+
+  playAgain(): Promise<RoomResult> {
+    return this.invoke<RoomResult>("PlayAgain");
+  }
+
+  takeBack(): Promise<RoomResult> {
+    return this.invoke<RoomResult>("TakeBack");
   }
 
   private invoke<T>(method: string, ...args: unknown[]): Promise<T> {
