@@ -7,6 +7,7 @@ import { useLanguage } from "../i18n/LanguageProvider";
 import { AnnouncePanel, BidPanel } from "./ActionPanels";
 import { NoticeBar, ResultPanel, ScoreBoard, StartPanel } from "./Chrome";
 import { Hand } from "./Hand";
+import { HandResultDialog } from "./HandResultDialog";
 import { SeatPanel } from "./Seat";
 import { TrickArea } from "./TrickArea";
 import { seatName, teamName } from "./labels";
@@ -73,6 +74,8 @@ export function Table() {
     const trick = frame?.trick ?? { plays: game.currentTrick, winner: null, mode: "live" as const };
     const toAct = game.phase !== "finished" ? game.toAct : null;
     const myTurn = presented.settled && game.legalActions.length > 0;
+    // Cards read as playable / not playable only while the person is the one to play a card.
+    const choosingCard = game.phase === "playing" && game.legalActions.some((a) => a.kind === "play");
     const status =
       state.pending !== null
         ? t("status.pending")
@@ -90,36 +93,57 @@ export function Table() {
     body = (
       <>
         <ScoreBoard game={game} />
-        <div className="mt-3 grid grid-cols-[auto_1fr_auto] items-start gap-2">
+        <div className="grid min-h-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)] items-stretch gap-2">
           <div className="col-span-3 flex justify-center">
             <SeatPanel seat="north" game={game} dealing={dealing} perSeat={perSeat} />
           </div>
           <div className="self-center">
             <SeatPanel seat="west" game={game} dealing={dealing} perSeat={perSeat} />
           </div>
-          <TrickArea trick={trick} />
+          {game.phase === "bidding" ? (
+            <div className="felt flex min-h-0 items-center justify-center rounded-2xl p-2">
+              <BidPanel game={game} enabled={enabled} onAct={submit} voided={voided} />
+            </div>
+          ) : (
+            <TrickArea trick={trick} />
+          )}
           <div className="self-center">
             <SeatPanel seat="east" game={game} dealing={dealing} perSeat={perSeat} />
           </div>
         </div>
-        <p data-testid="status" className="mt-3 text-center text-lg font-semibold">
-          {status}
-        </p>
-        {game.phase === "bidding" && <BidPanel game={game} enabled={enabled} onAct={submit} voided={voided} />}
         {game.phase !== "bidding" && <AnnouncePanel game={game} enabled={enabled} onAct={submit} />}
-        <div className="mt-3 flex justify-center">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
           <SeatPanel seat="south" game={game} dealing={dealing} perSeat={perSeat} />
+          <p data-testid="status" className="text-center text-base font-semibold">
+            {status}
+          </p>
         </div>
-        <Hand game={game} enabled={enabled} onAct={submit} dealing={dealing} dealer={game.dealer} />
+        <Hand
+          game={game}
+          enabled={enabled}
+          onAct={submit}
+          dealing={dealing}
+          dealer={game.dealer}
+          playing={choosingCard}
+        />
         {state.session === "finished" && presented.settled && (
           <ResultPanel game={latest} canStart={connected} onPlayAgain={startGame} />
+        )}
+        {frame?.result && (
+          <HandResultDialog
+            key={frame.result.dealNumber}
+            summary={frame.result}
+            onDismiss={presented.release}
+            onPlayAgain={frame.result.winner ? startGame : undefined}
+            canStart={connected}
+          />
         )}
       </>
     );
   }
 
   return (
-    <div>
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <NoticeBar notice={state.notice} onDismiss={dismissNotice} />
       {body}
       <div className="sr-only" role="status" aria-live="polite" data-testid="live-region">

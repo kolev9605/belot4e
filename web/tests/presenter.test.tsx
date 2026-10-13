@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { DEFAULT_PACING } from "../src/theme/motion";
 import type { CompletedTrick } from "../src/protocol/types";
-import { FakeHubClient, makeUpdate } from "./fixtures";
+import { FakeHubClient, makeSummary, makeUpdate } from "./fixtures";
 
 const done: CompletedTrick = {
   dealNumber: 1,
@@ -140,5 +140,86 @@ describe("presenter pacing (US2)", () => {
     await advance(10);
     expect(screen.getByTestId("connection-banner")).toHaveAttribute("data-status", "reconnecting");
     expect(screen.queryByText("Trick won by West")).not.toBeInTheDocument();
+  });
+});
+
+describe("bidding pace and hand result (spec 006)", () => {
+  const bidding = (history: { seat: "north" | "east" | "south" | "west"; action: string; contract: null }[], extra = {}) => ({
+    phase: "bidding" as const,
+    contract: null,
+    currentTrick: [],
+    biddingHistory: history,
+    legalActions: [],
+    toAct: "east" as const,
+    ...extra,
+  });
+  const pass = (seat: "north" | "east" | "south" | "west") => ({ seat, action: "pass", contract: null });
+
+  it("shows consecutive bot calls one at a time, each held for the bid pause", async () => {
+    const client = await mount();
+    await push(client, makeUpdate(0, bidding([])));
+    await settleOpeningDeal();
+    await push(client, makeUpdate(1, bidding([pass("west"), pass("north")])));
+
+    // The first call is on screen straight away, the later one only after the pause.
+    expect(screen.getByTestId("seat-calls-west")).toBeInTheDocument();
+    expect(screen.queryByTestId("seat-calls-north")).toBeNull();
+
+    await advance(DEFAULT_PACING.bidHoldMs - 100);
+    expect(screen.queryByTestId("seat-calls-north")).toBeNull();
+    await advance(200);
+    expect(screen.getByTestId("seat-calls-north")).toBeInTheDocument();
+  });
+
+  it("keeps the bid buttons disabled until the last bot call has been shown", async () => {
+    const client = await mount();
+    await push(client, makeUpdate(0, bidding([])));
+    await settleOpeningDeal();
+    await push(
+      client,
+      makeUpdate(1, {
+        ...bidding([pass("west"), pass("north")], { toAct: "south" }),
+        legalActions: [{ kind: "pass", seat: "south" }],
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Pass" })).toBeDisabled();
+    await advance(DEFAULT_PACING.bidHoldMs * 2 + DEFAULT_PACING.snapMs + 100);
+    expect(screen.getByRole("button", { name: "Pass" })).toBeEnabled();
+  });
+
+  const lastTrick = { ...done, dealNumber: 1, trickNumber: 8 };
+
+  it("opens the result pop-up after the last trick and holds the next deal until it is dismissed", async () => {
+    const client = await mount();
+    await push(client, makeUpdate(0, { currentTrick: lastTrick.plays.slice(0, 3), legalActions: [] }));
+    await settleOpeningDeal();
+    await push(
+      client,
+      makeUpdate(1, {
+        dealNumber: 2,
+        dealer: "north",
+        currentTrick: [],
+        completedTricks: [],
+        lastCompletedTrick: lastTrick,
+        lastHand: makeSummary({ dealNumber: 1 }),
+        phase: "bidding",
+        contract: null,
+        legalActions: [],
+      }),
+    );
+    // Before the last trick has been shown there is no pop-up.
+    expect(screen.queryByTestId("hand-result")).toBeNull();
+
+    await advance(DEFAULT_PACING.playTravelMs + DEFAULT_PACING.trickHoldMs + DEFAULT_PACING.collectMs + 100);
+    expect(screen.getByTestId("hand-result")).toBeInTheDocument();
+    // Nothing moves on behind it, however long it stays open.
+    await advance(10_000);
+    expect(screen.getByTestId("hand-result")).toBeInTheDocument();
+    expect(screen.queryByTestId("deal-origin")).toBeNull();
+
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "Continue" }));
+    await advance(100);
+    expect(screen.queryByTestId("hand-result")).toBeNull();
+    expect(screen.getByTestId("seat-north")).toHaveTextContent("Dealer");
   });
 });

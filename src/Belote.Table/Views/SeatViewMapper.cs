@@ -9,14 +9,15 @@ namespace Belote.Table;
 /// <summary>Projects a <see cref="SeatView"/> (already free of hidden information) onto the wire.</summary>
 public static class SeatViewMapper
 {
-    public static TableUpdateDto ToUpdate(int version, SeatView view, CompletedTrick? lastCompleted) =>
+    public static TableUpdateDto ToUpdate(
+        int version, SeatView view, CompletedTrick? lastCompleted, HandSummary? lastHand = null) =>
         new(
             TableUpdateDto.CurrentProtocolVersion,
             version,
             view.Phase == Phase.Finished,
-            Map(view, lastCompleted));
+            Map(view, lastCompleted, lastHand));
 
-    public static SeatViewDto Map(SeatView view, CompletedTrick? lastCompleted)
+    public static SeatViewDto Map(SeatView view, CompletedTrick? lastCompleted, HandSummary? lastHand = null)
     {
         var legal = LegalActions.For(view).Select(a => LegalActionMapper.ToDto(view.Seat, a)).ToArray();
         return new SeatViewDto(
@@ -55,7 +56,8 @@ public static class SeatViewMapper
             MatchScore: new ScoreDto(view.MatchScore[0], view.MatchScore[1]),
             HeldOverPoints: view.HeldOverPoints,
             Winner: view.Winner is { } w ? JsonNames.Of(w) : null,
-            LegalActions: legal);
+            LegalActions: legal,
+            LastHand: lastHand is null ? null : Summary(lastHand));
     }
 
     /// <summary>
@@ -70,6 +72,40 @@ public static class SeatViewMapper
             .ThenByDescending(c => CardStrength.Of(rules, kind, c.Suit, c))
             .ThenByDescending(c => c.Rank)
             .ToArray();
+    }
+
+    private static HandSummaryDto Summary(HandSummary s)
+    {
+        var r = s.Result;
+        TeamHandDto TeamHand(Team team) => new(
+            s.WonCards[(int)team].Select(c => c.ToString()).ToArray(),
+            r.CardPoints[(int)team],
+            r.LastTrickTeam == team ? r.LastTrickBonus : 0,
+            r.AnnouncementPoints[(int)team],
+            r.BelotePoints[(int)team],
+            r.AllTricksTeam == team ? r.AllTricksBonus : 0,
+            r.RawTotals[(int)team],
+            r.GamePoints[(int)team]);
+
+        return new HandSummaryDto(
+            s.DealNumber,
+            new ContractDto(JsonNames.Of(s.Contract.Kind), JsonNames.Of(s.Contract.Declarer), s.Contract.Multiplier),
+            JsonNames.Of(r.DeclaringTeam),
+            r.Outcome switch
+            {
+                HandOutcome.Made => "made",
+                HandOutcome.Failed => "failed",
+                _ => "tied",
+            },
+            new TeamHandsDto(TeamHand(Team.NorthSouth), TeamHand(Team.EastWest)),
+            new ScoreDto(s.MatchScore[0], s.MatchScore[1]),
+            new HeldOverDto(
+                r.HeldOverBefore,
+                r.AwardedFromHeldOver,
+                r.HeldOverAwardedTo is { } to ? JsonNames.Of(to) : null,
+                r.NewlyHeld,
+                r.HeldOverAfter),
+            s.Winner is { } w ? JsonNames.Of(w) : null);
     }
 
     private static HandSizesDto Sizes(SeatView view)

@@ -13,7 +13,7 @@ no game rules.
 | `npm run typecheck` | strict TypeScript check |
 | `npm test` | Vitest unit and component tests |
 | `npm run build` | typecheck and production build into `dist/` |
-| `npm run e2e` | Playwright end-to-end tests; starts the server itself with zero bot delay and serves `dist/` (run `npm run build` first). Uses the installed Chrome locally and Playwright's Chromium when `CI` is set (`npx playwright install chromium`). |
+| `npm run e2e` | Playwright end-to-end tests (slow, opt-in, never run in CI: with `CI` set no spec is picked up); starts the server itself with zero bot delay and serves `dist/` (run `npm run build` first). Uses the installed Chrome locally and Playwright's Chromium when `CI` is set (`npx playwright install chromium`). |
 
 ## Layout
 
@@ -33,3 +33,16 @@ no game rules.
 - The hand is grouped by suit in the fixed order spades, hearts, clubs, diamonds. Order inside a suit is the
   server's (strongest first for the contract in force); the client never computes card power.
 
+## One-screen table, hand and results (spec 006)
+
+- The page is a viewport-height column (`h-dvh`): top bar, table, status row and hand. Card size comes from
+  `--card-h`/`--card-w` in `src/theme/tokens.css` (a clamp on the viewport height, also capped by the width so
+  eight cards fit a phone), so the whole hand stays visible on a laptop screen without scrolling.
+- The hand is one non-wrapping row with a constant overlap and one fixed gap between suits. Highlighting a
+  playable card never moves it; only the card under the pointer lifts. Outside the playing phase (bidding, or
+  another seat's turn) cards use the neutral `inert` mode and look normal.
+- Bidding is paced by the presenter's `bid` step (`bidHoldMs` in `src/theme/motion.ts`); the person's own call is
+  never delayed. Each seat box lists the calls that seat made (`callLabel`, derived from `biddingHistory`).
+- A finished hand opens `HandResultDialog` through the presenter's blocking `result` step: the next deal does not
+  start until it is dismissed. Its data is the server's `lastHand` view field
+  (`specs/006-table-ui-polish/contracts/hand-summary.md`); the client shows it and computes no scores.

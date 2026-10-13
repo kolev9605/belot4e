@@ -34,6 +34,29 @@ public class ViewPrivacyTests
     }
 
     [Fact]
+    public async Task LastHandIsIdenticalForEverySeatAndHoldsOnlyPlayedCards()
+    {
+        await using var table = Harness.NewTable(9);
+        var recorder = new Recorder();
+        using var _ = table.Subscribe(recorder);
+        await Harness.PlayToEndAsync(table, recorder, Policies.First);
+
+        var state = table.Snapshot.State!;
+        var played = table.Snapshot.Events.OfType<CardPlayed>().Select(e => (e.Deal, e.Card.ToString())).ToHashSet();
+        var summary = recorder.Updates[^1].View.LastHand!;
+        foreach (var seat in new[] { Seat.North, Seat.East, Seat.South, Seat.West })
+        {
+            var view = SeatViewMapper.Map(Projection.For(state, seat), null, table.Snapshot.LastHand);
+            Assert.Equal(Harness.Json(summary), Harness.Json(view.LastHand));
+        }
+
+        foreach (var card in summary.Teams.NorthSouth.WonCards.Concat(summary.Teams.EastWest.WonCards))
+        {
+            Assert.Contains((summary.DealNumber, card), played);
+        }
+    }
+
+    [Fact]
     public async Task OracleDetectsAForeignCard()
     {
         await using var table = Harness.NewTable(4);

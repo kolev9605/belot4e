@@ -1,4 +1,5 @@
-import type { PlayedCard, Seat, TableView } from "../protocol/types";
+import type { HandSummary, PlayedCard, Seat, TableView } from "../protocol/types";
+import { SEAT_ORDER } from "../theme/geometry";
 
 export type TrickMode = "live" | "hold" | "collect";
 
@@ -16,9 +17,11 @@ export interface Frame {
   dealing: boolean;
   /** Cards each seat receives in this deal step (5 for the first deal, 3 for the second). */
   perSeat: number;
+  /** Set on the blocking `result` step: the hand whose result the pop-up shows. */
+  result: HandSummary | null;
 }
 
-export type StepKind = "deal" | "play" | "hold" | "collect" | "snap" | "settle";
+export type StepKind = "deal" | "play" | "hold" | "collect" | "snap" | "settle" | "bid" | "result";
 
 export interface PresentationStep {
   kind: StepKind;
@@ -31,8 +34,8 @@ function liveTrick(view: TableView): TrickFrame {
   return { plays: view.currentTrick, winner: null, mode: "live" };
 }
 
-function frame(view: TableView, trick: TrickFrame, dealing = false, perSeat = 0): Frame {
-  return { view, trick, dealing, perSeat };
+function frame(view: TableView, trick: TrickFrame, dealing = false, perSeat = 0, result: HandSummary | null = null): Frame {
+  return { view, trick, dealing, perSeat, result };
 }
 
 function biggestHand(view: TableView): number {
@@ -59,9 +62,37 @@ function emptiedHand(view: TableView): TableView {
   };
 }
 
+/** True when `next` carries the result of a hand that `prev` had not yet shown. */
+function newResult(prev: TableView, next: TableView): HandSummary | null {
+  const summary = next.lastHand ?? null;
+  return summary && summary.dealNumber !== (prev.lastHand?.dealNumber ?? null) ? summary : null;
+}
+
+/**
+ * One step per call made since `prev`, each showing the bidding table as it stood after that call.
+ * The frames are built from `prev` so the rest of the table does not jump ahead of the call.
+ */
+function bidSteps(prev: TableView, next: TableView): PresentationStep[] {
+  const before = prev.biddingHistory.length;
+  const after = next.biddingHistory.length;
+  if (after <= before || next.dealNumber !== prev.dealNumber) return [];
+  const steps: PresentationStep[] = [];
+  for (let count = before + 1; count <= after; count++) {
+    const shown = next.biddingHistory.slice(0, count);
+    const caller = shown[shown.length - 1]!.seat;
+    // Whose turn it is once this call has been made; the bid buttons stay disabled until the
+    // presenter settles, so showing the server's legal bids here is harmless.
+    const toAct = SEAT_ORDER[(SEAT_ORDER.indexOf(caller) + 1) % 4]!;
+    const view: TableView = { ...prev, biddingHistory: shown, toAct, legalActions: next.legalActions };
+    steps.push({ kind: "bid", frame: frame(view, EMPTY_TRICK) });
+  }
+  return steps;
+}
+
 /**
  * Turns the change from the previously presented view into the ordered steps that show it.
- * Only fields already in the projection are used (dealNumber, dealer, currentTrick, completedTricks).
+ * Only fields already in the projection are used (dealNumber, dealer, currentTrick, completedTricks,
+ * biddingHistory, lastHand).
  */
 export function diffViews(prev: TableView | null, next: TableView): PresentationStep[] {
   if (!prev) {
@@ -73,21 +104,27 @@ export function diffViews(prev: TableView | null, next: TableView): Presentation
         ]
       : [{ kind: "snap", frame: frame(next, liveTrick(next)) }];
   }
+  return [...bidSteps(prev, next), ...diffRest(prev, next)];
+}
 
+function diffRest(prev: TableView, next: TableView): PresentationStep[] {
   const steps: PresentationStep[] = [];
   const newDeal = prev.phase === "finished" || next.dealNumber !== prev.dealNumber || next.dealer !== prev.dealer;
 
   if (newDeal) {
     // The last trick of a hand arrives in the same update as the next deal; show it first.
     const last = next.lastCompletedTrick;
+    const closing = emptiedHand(prev);
     if (
       last &&
       last.dealNumber === prev.dealNumber &&
       prev.phase !== "finished" &&
       !prev.completedTricks.some((t) => t.trickNumber === last.trickNumber)
     ) {
-      steps.push(...trickSteps(emptiedHand(prev), last.plays, last.winner));
+      steps.push(...trickSteps(closing, last.plays, last.winner));
     }
+    const result = prev.phase !== "finished" ? newResult(prev, next) : null;
+    if (result) steps.push({ kind: "result", frame: frame(closing, EMPTY_TRICK, false, 0, result) });
     steps.push({ kind: "deal", frame: frame(next, EMPTY_TRICK, true, biggestHand(next)) });
     steps.push({ kind: "settle", frame: frame(next, liveTrick(next)) });
     return steps;
@@ -97,6 +134,8 @@ export function diffViews(prev: TableView | null, next: TableView): Presentation
     for (const trick of next.completedTricks.slice(prev.completedTricks.length)) {
       steps.push(...trickSteps(next, trick.plays, trick.winner));
     }
+    const result = newResult(prev, next);
+    if (result) steps.push({ kind: "result", frame: frame(next, EMPTY_TRICK, false, 0, result) });
     steps.push({ kind: "settle", frame: frame(next, liveTrick(next)) });
     return steps;
   }

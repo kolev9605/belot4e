@@ -14,7 +14,8 @@ test("a finished trick stays on the table long enough to read before it is swept
   );
   let heldAt = 0;
   for (let step = 0; step < 400 && heldAt === 0; step++) {
-    if ((await hold.textContent())?.trim()) {
+    // The trick area is only on the table once bidding is over.
+    if ((await hold.count()) > 0 && (await hold.textContent())?.trim()) {
       heldAt = Date.now();
       break;
     }

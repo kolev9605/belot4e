@@ -79,3 +79,59 @@ describe("table seats (US3)", () => {
     expect(within(screen.getByTestId("seat-east")).getByText("Противници")).toBeInTheDocument();
   });
 });
+
+describe("seat call history (spec 006 US4)", () => {
+  const bidding = {
+    phase: "bidding" as const,
+    contract: null,
+    legalActions: [{ kind: "pass" as const, seat: "south" as const }],
+  };
+
+  it("shows nothing before the first call", async () => {
+    const client = await mount();
+    await push(client, makeUpdate(1, { ...bidding, biddingHistory: [] }));
+    expect(screen.queryByTestId("seat-calls-west")).toBeNull();
+  });
+
+  it("lists each seat's calls in order with the latest marked", async () => {
+    const client = await mount();
+    await push(
+      client,
+      makeUpdate(1, {
+        ...bidding,
+        biddingHistory: [
+          { seat: "west", action: "pass", contract: null },
+          { seat: "north", action: "bid", contract: "hearts" },
+          { seat: "east", action: "bid", contract: "spades" },
+          { seat: "south", action: "pass", contract: null },
+          { seat: "west", action: "bid", contract: "noTrump" },
+        ],
+      }),
+    );
+    const west = screen.getByTestId("seat-calls-west");
+    const items = within(west).getAllByRole("listitem");
+    expect(items.map((li) => li.textContent)).toEqual(["Pass", "No trumps"]);
+    expect(items[1]).toHaveAttribute("data-latest", "true");
+    expect(items[0]).not.toHaveAttribute("data-latest");
+    expect(within(screen.getByTestId("seat-calls-north")).getByText("Hearts")).toBeInTheDocument();
+    expect(within(screen.getByTestId("seat-calls-south")).getByText("Pass")).toBeInTheDocument();
+  });
+
+  it("keeps the calls once play begins and clears them on the next deal", async () => {
+    const client = await mount();
+    const history = [
+      { seat: "west" as const, action: "pass", contract: null },
+      { seat: "east" as const, action: "bid", contract: "hearts" as const },
+    ];
+    await push(client, makeUpdate(1, { biddingHistory: history }));
+    expect(screen.getByTestId("seat-calls-east")).toHaveTextContent("Hearts");
+    await push(client, makeUpdate(2, { dealNumber: 2, biddingHistory: [] }));
+    expect(screen.queryByTestId("seat-calls-east")).toBeNull();
+  });
+
+  it("localizes the calls", async () => {
+    const client = await mount("bg");
+    await push(client, makeUpdate(1, { biddingHistory: [{ seat: "west", action: "pass", contract: null }] }));
+    expect(screen.getByTestId("seat-calls-west")).toHaveTextContent("Пас");
+  });
+});

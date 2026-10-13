@@ -28,6 +28,31 @@ public sealed record BeloteDto(string Seat, string Suit);
 
 public sealed record ScoreDto(int NorthSouth, int EastWest);
 
+public sealed record TeamHandDto(
+    IReadOnlyList<string> WonCards,
+    int CardPoints,
+    int LastTrickBonus,
+    int AnnouncementPoints,
+    int BelotePoints,
+    int AllTricksBonus,
+    int RawTotal,
+    int GamePoints);
+
+public sealed record TeamHandsDto(TeamHandDto NorthSouth, TeamHandDto EastWest);
+
+public sealed record HeldOverDto(int Before, int Awarded, string? AwardedTo, int NewlyHeld, int After);
+
+/// <summary>The most recently scored hand; played cards and engine-computed numbers only.</summary>
+public sealed record HandSummaryDto(
+    int DealNumber,
+    ContractDto Contract,
+    string DeclaringTeam,
+    string Outcome,
+    TeamHandsDto Teams,
+    ScoreDto MatchScore,
+    HeldOverDto HeldOver,
+    string? Winner);
+
 /// <summary>
 /// One intent on the wire. <c>kind</c> is one of bid, pass, contra, recontra, announce, play;
 /// legal actions in a view use exactly this shape so a client can echo one back unchanged.
@@ -69,7 +94,8 @@ public sealed record SeatViewDto(
     ScoreDto MatchScore,
     int HeldOverPoints,
     string? Winner,
-    IReadOnlyList<IntentDto> LegalActions);
+    IReadOnlyList<IntentDto> LegalActions,
+    HandSummaryDto? LastHand = null);
 
 public sealed record TableUpdateDto(int ProtocolVersion, int Version, bool Finished, SeatViewDto View)
 {

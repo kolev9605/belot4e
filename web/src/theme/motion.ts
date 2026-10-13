@@ -6,6 +6,8 @@ export interface PacingConfig {
   trickHoldMs: number;
   collectMs: number;
   snapMs: number;
+  /** How long a bot's bid or pass stays on screen before the next call appears. */
+  bidHoldMs: number;
 }
 
 export const DEFAULT_PACING: PacingConfig = {
@@ -15,6 +17,7 @@ export const DEFAULT_PACING: PacingConfig = {
   trickHoldMs: 1400,
   collectMs: 450,
   snapMs: 150,
+  bidHoldMs: 1100,
 };
 
 export const INSTANT_PACING: PacingConfig = {
@@ -24,6 +27,7 @@ export const INSTANT_PACING: PacingConfig = {
   trickHoldMs: 0,
   collectMs: 0,
   snapMs: 0,
+  bidHoldMs: 0,
 };
 
 export function isInstant(config: PacingConfig): boolean {
