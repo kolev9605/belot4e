@@ -24,7 +24,9 @@ public static class CliApp
                             [--max-illegal <N>] [--decision-timeout-ms <N>]
           belote-sim replay --seed <U64> [--rules <path|bulgarian>] [--seats <preset>] [--out <file>]
           belote-sim audit  --log <file>
-        Seat presets: all-bot, mixed-1..mixed-4, scripted-illegal
+          belote-sim bench  --games <N> [--seed <U64>] [--rules <path|bulgarian>] [--parallelism <N>]
+                            [--out <file>] [--min-win-rate <0..1>]
+        Seat presets: all-bot, mixed-1..mixed-4, scripted-illegal, all-smart, smart-ns, smart-ew, smart-table
         """;
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error)
@@ -43,6 +45,7 @@ public static class CliApp
                 "run" => await RunBatchAsync(options, output, error).ConfigureAwait(false),
                 "replay" => await ReplayAsync(options, output, error).ConfigureAwait(false),
                 "audit" => Audit(options, output, error),
+                "bench" => await BenchAsync(options, output, error).ConfigureAwait(false),
                 _ => Usage_(error, $"Unknown command '{args[0]}'."),
             };
         }
@@ -177,6 +180,61 @@ public static class CliApp
         if (!run.Finished)
         {
             error.WriteLine($"game did not finish: {run.Failure}: {run.FailureDetail}");
+            return GameFailed;
+        }
+
+        return Ok;
+    }
+
+    private static async Task<int> BenchAsync(Dictionary<string, string> options, TextWriter output, TextWriter error)
+    {
+        if (!options.TryGetValue("games", out var gamesText) || !int.TryParse(gamesText, out int games) || games < 1)
+        {
+            throw new ArgumentException("--games <N> is required and must be a positive integer.");
+        }
+
+        double? minWinRate = null;
+        if (options.TryGetValue("min-win-rate", out var minText))
+        {
+            if (!double.TryParse(minText, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double min) || min < 0 || min > 1)
+            {
+                throw new ArgumentException("--min-win-rate must be a number between 0 and 1.");
+            }
+
+            minWinRate = min;
+        }
+
+        var rules = LoadRules(options);
+        var result = await Benchmark.RunAsync(new BenchmarkOptions
+        {
+            BaseSeed = ulong.Parse(options.GetValueOrDefault("seed", "1")),
+            GameCount = games,
+            RuleSet = rules,
+            Parallelism = int.Parse(options.GetValueOrDefault("parallelism", Environment.ProcessorCount.ToString())),
+        }).ConfigureAwait(false);
+
+        if (options.TryGetValue("out", out var path))
+        {
+            File.WriteAllText(path, result.ToJson());
+        }
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        output.WriteLine($"games {result.GameCount}  seed {result.BaseSeed}  rules {rules.Name}");
+        output.WriteLine(string.Format(inv, "smart team wins   {0}   ({1:0.0}%)", result.SmartWins, result.SmartWinRate * 100));
+        output.WriteLine($"random team wins  {result.RandomWins}");
+        output.WriteLine(string.Format(inv, "mean score margin {0:+0.0;-0.0;0.0}", result.MeanScoreMargin));
+        output.WriteLine($"failed games      {result.Failed}");
+
+        if (result.Failed > 0)
+        {
+            error.WriteLine($"{result.Failed} game(s) failed the audit.");
+            return GameFailed;
+        }
+
+        if (minWinRate is { } required && result.SmartWinRate < required)
+        {
+            error.WriteLine(string.Format(inv, "smart win rate {0:0.000} is below --min-win-rate {1:0.000}", result.SmartWinRate, required));
             return GameFailed;
         }
 

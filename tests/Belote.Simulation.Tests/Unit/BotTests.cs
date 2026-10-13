@@ -85,6 +85,17 @@ public class RandomLegalBotTests
     }
 
     [Fact]
+    public void The_smart_bot_lives_in_the_same_core_only_assembly()
+    {
+        var assembly = typeof(SmartBot).Assembly;
+        Assert.Same(typeof(RandomLegalBot).Assembly, assembly);
+        var references = assembly.GetReferencedAssemblies().Select(a => a.Name).ToList();
+        Assert.DoesNotContain("Belote.Simulation", references);
+        Assert.DoesNotContain("Belote.Table", references);
+        Assert.DoesNotContain(references, r => r!.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_bot_asked_when_it_is_not_its_turn_has_nothing_to_choose()
     {
         var state = GameEngine.Start(RuleSets.Bulgarian, 5).State;

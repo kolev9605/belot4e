@@ -54,6 +54,7 @@ public sealed class LiveTable : IAsyncDisposable
     private ImmutableDictionary<Seat, Principal> _owners;
 
     private readonly Action<FinishedGame>? _onFinished;
+    private readonly string _botLabel;
 
     private LiveTable(
         TableOptions options,
@@ -64,6 +65,7 @@ public sealed class LiveTable : IAsyncDisposable
         Options = options;
         _onFinished = onFinished;
         _creator = creator;
+        _botLabel = botFactory is null ? nameof(Belote.Bots.SmartBot) : "CustomBot";
         Id = Guid.NewGuid().ToString("N");
 
         var bots = BotSeats.ToDictionary(s => s, s => new BotPrincipal(s));
@@ -73,7 +75,7 @@ public sealed class LiveTable : IAsyncDisposable
         _snapshot = new TableSnapshot(0, null, null, TableLifecycle.AwaitingSeat, false, ImmutableList<GameEvent>.Empty);
 
         _loop = Task.Run(RunAsync);
-        var driver = new BotDriver(this, options, botFactory ?? DefaultBot(options.Seed), _stop.Token);
+        var driver = new BotDriver(this, options, botFactory ?? DefaultBot, _stop.Token);
         _botLoop = Task.Run(driver.RunAsync);
     }
 
@@ -101,8 +103,8 @@ public sealed class LiveTable : IAsyncDisposable
         Action<FinishedGame>? onFinished = null) =>
         new(options, creator, botFactory, onFinished);
 
-    public static Func<Seat, IPlayer> DefaultBot(ulong seed) =>
-        seat => new Belote.Bots.RandomLegalBot(Seeds.ForSeat(seed, seat));
+    /// <summary>The bots every table seats by default: the calculated (non-random) <see cref="Belote.Bots.SmartBot"/>.</summary>
+    public static Func<Seat, IPlayer> DefaultBot { get; } = _ => new Belote.Bots.SmartBot();
 
     public IDisposable Subscribe(ITableObserver observer)
     {
@@ -373,7 +375,7 @@ public sealed class LiveTable : IAsyncDisposable
         var state = snap.State!;
         var seats = Seats.All.ToDictionary(
             s => s,
-            s => s == ClientSeat ? "RemoteClient" : nameof(Belote.Bots.RandomLegalBot));
+            s => s == ClientSeat ? "RemoteClient" : _botLabel);
         var log = new GameLog(state.Seed, state.RuleSet, seats, snap.Events);
         return new FinishedGame(Id, log, state.Winner!.Value, state.MatchScore[0], state.MatchScore[1]);
     }

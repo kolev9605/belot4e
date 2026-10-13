@@ -12,9 +12,21 @@ public static class SeatPresets
     public const string AllBot = "all-bot";
     public const string ScriptedIllegal = "scripted-illegal";
 
+    /// <summary>Smart bots in every seat.</summary>
+    public const string AllSmart = "all-smart";
+
+    /// <summary>Smart bots as North/South against random bots as East/West.</summary>
+    public const string SmartNs = "smart-ns";
+
+    /// <summary>Smart bots as East/West against random bots as North/South.</summary>
+    public const string SmartEw = "smart-ew";
+
+    /// <summary>Random South (the live table's baseline client) with smart North, East and West.</summary>
+    public const string SmartTable = "smart-table";
+
     public static IReadOnlyList<string> Names { get; } = new[]
     {
-        AllBot, "mixed-1", "mixed-2", "mixed-3", "mixed-4", ScriptedIllegal,
+        AllBot, "mixed-1", "mixed-2", "mixed-3", "mixed-4", ScriptedIllegal, AllSmart, SmartNs, SmartEw, SmartTable,
     };
 
     public static bool IsValid(string preset) => Names.Contains(preset);
@@ -26,6 +38,11 @@ public static class SeatPresets
     /// </summary>
     public static IReadOnlyDictionary<Seat, SeatController> Create(string preset, ulong gameSeed)
     {
+        if (preset is AllSmart or SmartNs or SmartEw or SmartTable)
+        {
+            return CreateSmart(preset, gameSeed);
+        }
+
         int scripted = preset switch
         {
             AllBot => 0,
@@ -55,6 +72,27 @@ public static class SeatPresets
             }
 
             result[seat] = new SeatController("ScriptedHuman", human);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<Seat, SeatController> CreateSmart(string preset, ulong gameSeed)
+    {
+        bool IsSmart(Seat seat) => preset switch
+        {
+            AllSmart => true,
+            SmartNs => seat.GetTeam() == Team.NorthSouth,
+            SmartEw => seat.GetTeam() == Team.EastWest,
+            _ => seat != Seat.South, // SmartTable
+        };
+
+        var result = new Dictionary<Seat, SeatController>();
+        foreach (var seat in Seats.All)
+        {
+            result[seat] = IsSmart(seat)
+                ? new SeatController(nameof(SmartBot), new SmartBot())
+                : new SeatController(nameof(RandomLegalBot), new RandomLegalBot(Seeds.ForSeat(gameSeed, seat)));
         }
 
         return result;
