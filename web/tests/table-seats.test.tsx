@@ -134,4 +134,31 @@ describe("seat call history (spec 006 US4)", () => {
     await push(client, makeUpdate(1, { biddingHistory: [{ seat: "west", action: "pass", contract: null }] }));
     expect(screen.getByTestId("seat-calls-west")).toHaveTextContent("Пас");
   });
+
+  // jsdom has no layout, so the guarantee is pinned through the sizing classes that fix each box.
+  it("gives every seat box a fixed size that does not depend on its content", async () => {
+    const client = await mount();
+    await push(client, makeUpdate(1, { dealer: "south", toAct: "west", biddingHistory: [], handSizes: { north: 8, east: 8, south: 8, west: 8 } }));
+    const seats = ["north", "east", "south", "west"] as const;
+    const sizing = () => seats.map((seat) => screen.getByTestId(`seat-${seat}`).className);
+    const before = sizing();
+    await push(
+      client,
+      makeUpdate(2, {
+        dealer: "north",
+        toAct: "north",
+        handSizes: { north: 3, east: 5, south: 5, west: 4 },
+        biddingHistory: [
+          { seat: "west", action: "pass", contract: null },
+          { seat: "north", action: "bid", contract: "hearts" },
+        ],
+      }),
+    );
+    // Only the turn highlight may differ; width, height and overflow classes stay put.
+    const strip = (c: string) => c.replace(/!border-accent shadow-\[[^\]]+\]/, "").replace(/\s+/g, " ").trim();
+    expect(sizing().map(strip)).toEqual(before.map(strip));
+    expect(screen.getByTestId("seat-north").className).toContain("w-64");
+    expect(screen.getByTestId("seat-west").className).toContain("h-full");
+    expect(screen.getByTestId("seat-east").className).toContain("overflow-hidden");
+  });
 });
